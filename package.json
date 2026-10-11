@@ -1,0 +1,32 @@
+{
+  "name": "truediet-backend",
+  "version": "1.0.0",
+  "description": "TrueDiet Backend API with Hono, Drizzle ORM, PostgreSQL and Better Auth",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:push": "drizzle-kit push",
+    "auth:generate": "auth generate --config ./src/lib/auth.ts"
+  },
+  "dependencies": {
+    "@better-auth/expo": "^1.1.21",
+    "@hono/node-server": "^1.13.7",
+    "better-auth": "^1.1.21",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.6.14",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
