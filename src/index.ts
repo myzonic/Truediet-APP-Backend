@@ -56,11 +56,32 @@ app.on(["POST", "GET"], "/api/auth/**", (c) => {
 // 3. Mount TrueDiet Profile & Assessment API
 app.route("/api/profile", profileRoutes);
 
-// Server start
-const port = Number(process.env.PORT) || 3000;
-console.log(`Starting TrueDiet backend on port ${port}...`);
+// Run database migrations on startup
+async function startServer() {
+  try {
+    const { migrate } = await import("drizzle-orm/node-postgres/migrator");
+    const { db } = await import("./db/index.js");
+    const fs = await import("fs");
+    const migrationsFolder = fs.existsSync("./dist/db/migrations")
+      ? "./dist/db/migrations"
+      : "./src/db/migrations";
 
-serve({
-  fetch: app.fetch,
-  port,
-});
+    console.log(`Checking and applying database migrations from ${migrationsFolder}...`);
+    await migrate(db, { migrationsFolder });
+    console.log("Database migrations verified and up to date!");
+  } catch (err: any) {
+    console.error("Migration error on startup:", err.message);
+  }
+
+  // Server start
+  const port = Number(process.env.PORT) || 3000;
+  console.log(`Starting TrueDiet backend on port ${port}...`);
+
+  serve({
+    fetch: app.fetch,
+    port,
+  });
+}
+
+startServer();
+
