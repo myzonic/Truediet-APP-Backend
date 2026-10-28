@@ -8,6 +8,83 @@
       "when": 1791759249799,
       "tag": "0000_greedy_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791968973349,
+      "tag": "0001_bright_speed_demon",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791969220504,
+      "tag": "0002_useful_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792057238303,
+      "tag": "0003_old_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792057549275,
+      "tag": "0004_little_sebastian_shaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792675622796,
+      "tag": "0005_public_goliath",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792976248440,
+      "tag": "0006_production_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792977413051,
+      "tag": "0007_appointments_and_registrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792978791703,
+      "tag": "0008_baseline_content_slugs",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792978967322,
+      "tag": "0009_map_legacy_content_slugs",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792980093435,
+      "tag": "0010_remove_duplicate_content",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792980165581,
+      "tag": "0011_remove_duplicate_content",
+      "breakpoints": true
     }
   ]
 }

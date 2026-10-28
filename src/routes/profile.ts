@@ -42,7 +42,11 @@ profileRoutes.get("/", async (c) => {
 // POST /api/profile -> Create or update onboarding profile
 profileRoutes.post("/", async (c) => {
   const user = c.get("user") as { id: string; name: string; email: string };
-  const body = await c.req.json();
+  const body = await c.req.json().catch(() => null);
+
+  if (!body || typeof body !== "object") {
+    return c.json({ error: "invalid_request", message: "A JSON body is required" }, 400);
+  }
 
   const {
     displayName,
@@ -54,7 +58,34 @@ profileRoutes.post("/", async (c) => {
     allergies,
     dietaryPreferences,
     isAssessmentComplete,
-  } = body;
+  } = body as Record<string, unknown>;
+
+  // Only accept the documented types. `allergies` and `dietaryPreferences`
+  // are stored as jsonb string arrays, so anything else is rejected rather
+  // than written into the column.
+  const readString = (value: unknown, max = 200): string | null =>
+    typeof value === "string" ? value.trim().slice(0, max) : null;
+
+  const readStringArray = (value: unknown): string[] | null => {
+    if (value === undefined || value === null) return null;
+    if (!Array.isArray(value)) return null;
+    if (!value.every((entry) => typeof entry === "string")) return null;
+    return value.map((entry) => entry.trim().slice(0, 100)).filter(Boolean).slice(0, 50);
+  };
+
+  const allergiesList = readStringArray(allergies);
+  const dietaryList = readStringArray(dietaryPreferences);
+
+  if (allergies !== undefined && allergies !== null && allergiesList === null) {
+    return c.json({ error: "invalid_request", message: "allergies must be an array of strings" }, 400);
+  }
+  if (
+    dietaryPreferences !== undefined &&
+    dietaryPreferences !== null &&
+    dietaryList === null
+  ) {
+    return c.json({ error: "invalid_request", message: "dietaryPreferences must be an array of strings" }, 400);
+  }
 
   const existingProfile = await db.query.profile.findFirst({
     where: eq(profile.userId, user.id),
@@ -64,16 +95,16 @@ profileRoutes.post("/", async (c) => {
     const [updated] = await db
       .update(profile)
       .set({
-        displayName: displayName ?? existingProfile.displayName,
-        age: age ?? existingProfile.age,
-        sex: sex ?? existingProfile.sex,
-        height: height ?? existingProfile.height,
-        weight: weight ?? existingProfile.weight,
-        goal: goal ?? existingProfile.goal,
-        allergies: allergies ?? existingProfile.allergies,
-        dietaryPreferences: dietaryPreferences ?? existingProfile.dietaryPreferences,
+        displayName: readString(displayName) ?? existingProfile.displayName,
+        age: readString(age, 40) ?? existingProfile.age,
+        sex: readString(sex, 40) ?? existingProfile.sex,
+        height: readString(height, 40) ?? existingProfile.height,
+        weight: readString(weight, 40) ?? existingProfile.weight,
+        goal: readString(goal, 120) ?? existingProfile.goal,
+        allergies: allergiesList ?? existingProfile.allergies,
+        dietaryPreferences: dietaryList ?? existingProfile.dietaryPreferences,
         isAssessmentComplete:
-          isAssessmentComplete !== undefined
+          typeof isAssessmentComplete === "boolean"
             ? isAssessmentComplete
             : existingProfile.isAssessmentComplete,
         updatedAt: new Date(),
@@ -84,21 +115,33 @@ profileRoutes.post("/", async (c) => {
     return c.json({ profile: updated });
   }
 
+  // The profile row is unique per user. Inserting with a conflict guard
+  // makes two concurrent first-time submissions safe instead of raising a
+  // unique violation.
   const [created] = await db
     .insert(profile)
     .values({
       userId: user.id,
-      displayName: displayName || user.name,
-      age,
-      sex,
-      height,
-      weight,
-      goal,
-      allergies: allergies || [],
-      dietaryPreferences: dietaryPreferences || [],
+      displayName: readString(displayName) || user.name,
+      age: readString(age, 40),
+      sex: readString(sex, 40),
+      height: readString(height, 40),
+      weight: readString(weight, 40),
+      goal: readString(goal, 120),
+      allergies: allergiesList || [],
+      dietaryPreferences: dietaryList || [],
       isAssessmentComplete: Boolean(isAssessmentComplete),
     })
+    .onConflictDoNothing({ target: profile.userId })
     .returning();
 
-  return c.json({ profile: created }, 201);
+  if (created) {
+    return c.json({ profile: created }, 201);
+  }
+
+  // Another request created the row first - return the stored profile.
+  const stored = await db.query.profile.findFirst({
+    where: eq(profile.userId, user.id),
+  });
+  return c.json({ profile: stored ?? null });
 });

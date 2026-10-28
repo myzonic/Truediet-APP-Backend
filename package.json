@@ -9,13 +9,21 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
+    "db:local": "node scripts/local-db.mjs",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:push": "drizzle-kit push",
+    "db:inspect": "node scripts/db-inspect.mjs",
+    "db:verify": "node scripts/db-verify.mjs",
+    "db:sync-check": "node scripts/client-sync-check.mjs",
+    "db:cleanup-test": "node scripts/cleanup-test-data.mjs",
+    "routes:check": "node scripts/route-check.mjs",
+    "test": "tsx --test src/lib/validation.test.ts",
     "auth:generate": "auth generate --config ./src/lib/auth.ts"
   },
   "dependencies": {
     "@better-auth/expo": "^1.1.21",
     "@hono/node-server": "^1.13.7",
+    "@stream-io/node-sdk": "^0.8.14",
     "better-auth": "^1.1.21",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.4",
@@ -26,6 +34,7 @@
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.31.11",
+    "embedded-postgres": "^16.14.0-beta.17",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
