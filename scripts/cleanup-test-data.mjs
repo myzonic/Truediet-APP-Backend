@@ -1,4 +1,4 @@
-import pg from "pg";
+﻿import pg from "pg";
 
 const url =
   process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:5432/truediet";
@@ -9,7 +9,9 @@ const deleted = await pool.query(
                       or email like 'client-sync-%@truediet.test'
                       or email like 'remote-check-%@truediet.test'
                       or email like 'tools-verify-%@truediet.test'
-                      or email like 'iso-%@t.test'`
+                      or email like 'iso-%@t.test'
+                      or email like 'flow-%@truediet.test'
+                      or email like 'rl-%@truediet.test'`
 );
 console.log("deleted test users:", deleted.rowCount);
 

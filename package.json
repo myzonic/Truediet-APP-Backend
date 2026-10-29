@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "truediet-backend",
   "version": "1.0.0",
   "description": "TrueDiet Backend API with Hono, Drizzle ORM, PostgreSQL and Better Auth",
@@ -17,7 +17,9 @@
     "db:sync-check": "node scripts/client-sync-check.mjs",
     "db:cleanup-test": "node scripts/cleanup-test-data.mjs",
     "routes:check": "node scripts/route-check.mjs",
-    "test": "tsx --test src/lib/validation.test.ts",
+    "test:auth-email": "node scripts/auth-email-flow.mjs",
+    "test:smtp": "node scripts/email-smtp.mjs",
+    "test": "tsx --test src/lib/validation.test.ts src/lib/email.test.ts",
     "auth:generate": "auth generate --config ./src/lib/auth.ts"
   },
   "dependencies": {
@@ -28,10 +30,12 @@
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.6.14",
+    "nodemailer": "^10.2.1",
     "pg": "^8.13.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.31.11",
     "embedded-postgres": "^16.14.0-beta.17",

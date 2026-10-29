@@ -30,6 +30,10 @@ RUN npm install --omit=dev --legacy-peer-deps
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/db/migrations ./src/db/migrations
 
+# Operational scripts (SMTP verification, database and route checks). They
+# read credentials from the environment only, so no secret is baked in.
+COPY scripts ./scripts
+
 # Run as a non-root user
 RUN addgroup -S truediet && adduser -S truediet -G truediet && chown -R truediet:truediet /app
 USER truediet

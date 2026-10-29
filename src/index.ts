@@ -3,6 +3,8 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { serve } from "@hono/node-server";
 import { auth } from "./lib/auth.js";
+import { isEmailConfigured } from "./lib/email.js";
+import { renderResetPage, renderVerifyPage, pageHeaders } from "./lib/auth-pages.js";
 import { profileRoutes } from "./routes/profile.js";
 import { contentRoutes } from "./routes/content.js";
 import { savedRoutes } from "./routes/saved.js";
@@ -124,9 +126,50 @@ app.get("/health", async (c) => {
   }
 });
 
+// Guard for auth email endpoints.
+//
+// Better Auth runs sendResetPassword inside runInBackgroundOrAwait, which
+// swallows every error, so a missing or broken SMTP configuration would still
+// answer {status:true} and the app would tell the user to check their inbox
+// when no email could possibly be sent. Checking the configuration before
+// delegating is the only point where a truthful failure can be returned. The
+// check is independent of the address, so it cannot be used to discover
+// whether an account exists.
+//
+// The guard lives inside this single handler on purpose: Hono fails to match
+// the `/api/auth/**` wildcard once any other concrete path is registered
+// under /api/auth (verified - every auth request then 404s), so neither a
+// `use(path)` middleware nor a second `on(path)` route may be added here.
+const EMAIL_GUARD_BODY = {
+  error: "email_not_configured",
+  code: "EMAIL_NOT_CONFIGURED",
+  message:
+    "Email delivery is not configured on this server. Set SMTP_HOST, SMTP_USER, SMTP_PASS and EMAIL_FROM.",
+};
+
 // 2. Mount Better Auth Handler on /api/auth/*
 app.on(["POST", "GET"], "/api/auth/**", (c) => {
+  const pathname = new URL(c.req.url).pathname;
+  const sendsEmail =
+    pathname === "/api/auth/request-password-reset" ||
+    pathname === "/api/auth/send-verification-email";
+  if (c.req.method === "POST" && sendsEmail && !isEmailConfigured()) {
+    return c.json(EMAIL_GUARD_BODY, 503);
+  }
   return auth.handler(c.req.raw);
+});
+
+// 2b. Pages that the emails link to. They are rendered by this server so the
+// link works from any device's browser without a separate frontend.
+// Better Auth's own API paths are under /api/auth/*, so these do not collide.
+app.get("/reset", (c) => {
+  const page = renderResetPage(new URL(c.req.url).searchParams);
+  return new Response(page.html, { status: page.status, headers: pageHeaders() });
+});
+
+app.get("/verify-email", (c) => {
+  const page = renderVerifyPage();
+  return new Response(page.html, { status: page.status, headers: pageHeaders() });
 });
 
 // 3. Mount TrueDiet Profile & Assessment API

@@ -1,9 +1,8 @@
-# Exclude local development artefacts and secrets from the Docker build
-# context. The build context must be the `server/` directory.
+﻿# Exclude local development artefacts and secrets from the Docker build
+# context. The build context must be the server/ directory.
 node_modules
 dist
 .pgdata
 .env
 .env.*
 *.log
-scripts
