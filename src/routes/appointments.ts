@@ -82,6 +82,41 @@ appointmentRoutes.post("/", async (c) => {
   // A confirmed booking comes from Cal.com; anything else is a request.
   const status = bookingId ? "confirmed" : "requested";
 
+  // The same booking submitted twice (client retry, two devices) must not
+  // create two rows.
+  if (bookingId) {
+    const [existing] = await db
+      .select()
+      .from(appointment)
+      .where(eq(appointment.bookingId, bookingId))
+      .limit(1);
+
+    if (existing) {
+      // A booking id belongs to exactly one account.
+      if (existing.userId !== user.id) {
+        return c.json(
+          { error: "booking_conflict", message: "This booking is already associated with another account." },
+          409
+        );
+      }
+
+      const [updated] = await db
+        .update(appointment)
+        .set({
+          slot,
+          visitType,
+          meetingUrl: meetingUrl ?? existing.meetingUrl,
+          callId: callId ?? existing.callId,
+          isoStart: isoStart ?? existing.isoStart,
+          updatedAt: new Date(),
+        })
+        .where(eq(appointment.id, existing.id))
+        .returning();
+
+      return c.json({ appointment: updated }, 200);
+    }
+  }
+
   const [created] = await db
     .insert(appointment)
     .values({

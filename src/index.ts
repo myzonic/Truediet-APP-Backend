@@ -15,6 +15,7 @@ import { accountRoutes } from "./routes/account.js";
 import { trackRoutes } from "./routes/track.js";
 import { pushRoutes } from "./routes/push.js";
 import { calRoutes } from "./routes/cal.js";
+import { calWebhookRoutes, calWebhookAltRoutes } from "./routes/cal-webhook.js";
 import { streamRoutes } from "./routes/stream.js";
 import { appointmentRoutes } from "./routes/appointments.js";
 import { registrationRoutes } from "./routes/registrations.js";
@@ -196,6 +197,10 @@ app.route("/api", trackRoutes);
 app.route("/api/push-tokens", pushRoutes);
 // 9. Mount Cal.com scheduling API
 app.route("/api/cal", calRoutes);
+
+// Cal.com webhook
+app.route("/api/webhooks", calWebhookRoutes);
+app.route("/api/cal", calWebhookAltRoutes);
 // 10. Mount GetStream video & phone calling API
 app.route("/api/stream", streamRoutes);
 // 11. Mount Telehealth appointments API
