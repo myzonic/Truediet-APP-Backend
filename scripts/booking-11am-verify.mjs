@@ -16,7 +16,10 @@
 const BASE = process.argv[2] || "https://api.true-diet.com";
 const TZ = "America/New_York";
 const stamp = Date.now();
-const email = `cal-11am-et-${stamp}@truediet.test`;
+// Cal.com rejects attendee domains without working MX records (.test and the
+// null-MX example.com both fail), so the throwaway account uses gmail.com;
+// the mailbox does not exist, so confirmation mail bounces harmlessly.
+const email = `cal-11am-et-${stamp}@gmail.com`;
 const password = "Cal11amTest123!";
 
 let cookie = "";
