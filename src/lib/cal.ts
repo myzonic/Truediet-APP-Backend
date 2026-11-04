@@ -160,8 +160,14 @@ export async function makeCalBooking(data: {
       name: data.name,
       email: data.email,
       timeZone: data.timeZone || "UTC",
+      language: "en",
     },
-    notes: data.notes || "",
+    // Cal.com's current API rejects a top-level `notes` property and requires
+    // a booking field with the slug `title`; the caller's notes answer it.
+    // Unknown slugs are ignored, so event types without that field still work.
+    bookingFieldsResponses: {
+      title: data.notes || "True Diet consultation",
+    },
     metadata: {
       source: "truediet_mobile_app",
     },
@@ -172,6 +178,9 @@ export async function makeCalBooking(data: {
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      // Without this header Cal.com serves the legacy booking schema, which
+      // rejects the payload above with timeZone/language validation errors.
+      "cal-api-version": "2024-08-13",
     },
     body: JSON.stringify(payload),
   });
