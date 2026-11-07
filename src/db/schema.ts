@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, uuid, jsonb, integer, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, uuid, jsonb, integer, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 // ==========================================
 // 1. Better Auth Core Authentication Schema
@@ -25,7 +25,9 @@ export const session = pgTable("session", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-});
+}, (t) => [
+  index("session_user_id_idx").on(t.userId),
+]);
 
 export const account = pgTable("account", {
   id: text("id").primaryKey(),
@@ -43,7 +45,9 @@ export const account = pgTable("account", {
   password: text("password"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("account_user_id_idx").on(t.userId),
+]);
 
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
@@ -137,7 +141,9 @@ export const messageThread = pgTable("message_threads", {
   status: text("status").notNull().default("open"),
   lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("message_threads_user_id_idx").on(t.userId),
+]);
 
 export const message = pgTable("messages", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -147,7 +153,9 @@ export const message = pgTable("messages", {
   authorType: text("author_type").notNull(), // 'user' | 'dietitian'
   body: text("body").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("messages_thread_id_idx").on(t.threadId),
+]);
 
 // ==========================================
 // 5. Plans, Subscriptions & Entitlements
@@ -235,7 +243,9 @@ export const mealLog = pgTable("meal_logs", {
   source: text("source").notNull().default("manual"), // 'manual' | 'voice'
   loggedAt: timestamp("logged_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("meal_logs_user_id_logged_at_idx").on(t.userId, t.loggedAt),
+]);
 
 export const hungerCheckin = pgTable("hunger_checkins", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -247,7 +257,9 @@ export const hungerCheckin = pgTable("hunger_checkins", {
   fullnessAfter: integer("fullness_after"),
   note: text("note"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("hunger_checkins_user_id_created_at_idx").on(t.userId, t.createdAt),
+]);
 
 export type MealLog = typeof mealLog.$inferSelect;
 export type HungerCheckin = typeof hungerCheckin.$inferSelect;
@@ -264,7 +276,9 @@ export const pushToken = pgTable("push_tokens", {
   token: text("token").notNull().unique(),
   platform: text("platform").notNull().default("unknown"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => [
+  index("push_tokens_user_id_idx").on(t.userId),
+]);
 
 export type PushToken = typeof pushToken.$inferSelect;
 
@@ -286,7 +300,12 @@ export const appointment = pgTable("appointments", {
   status: text("status").notNull().default("requested"), // requested|confirmed|cancelled|completed
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("appointments_user_id_created_at_idx").on(t.userId, t.createdAt),
+  // The booking route looks appointments up by booking id on every insert;
+  // without this it scans the whole table.
+  index("appointments_booking_id_idx").on(t.bookingId),
+]);
 
 export type Appointment = typeof appointment.$inferSelect;
 

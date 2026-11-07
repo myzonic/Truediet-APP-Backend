@@ -276,6 +276,9 @@ console.log(`API : ${BASE}\n`);
 
 // Cleanup
 {
+  // saveContent() created an app-only article row; remove it so a run leaves
+  // nothing behind (the saved item and account are deleted above/below).
+  await pool.query("delete from content where slug = $1", [`nb-client-${stamp}`]);
   const del = await api("/api/account", { method: "DELETE" });
   const userRows = await count('select count(*)::int as n from "user" where id = $1', [userId]);
   const leftovers = await count(
