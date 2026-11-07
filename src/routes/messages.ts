@@ -4,6 +4,7 @@ import { auth } from "../lib/auth.js";
 import { db } from "../db/index.js";
 import { message, messageThread, user as userTable } from "../db/schema.js";
 import { validateMessageBody } from "../lib/validation.js";
+import { sendPushToUser } from "../lib/push.js";
 import { and, asc, desc, eq } from "drizzle-orm";
 
 type Variables = {
@@ -184,6 +185,17 @@ messageRoutes.post("/", async (c) => {
     .update(messageThread)
     .set({ lastMessageAt: new Date() })
     .where(eq(messageThread.id, thread.id));
+
+  // Alert the member's devices about the dietitian's reply. Fire-and-forget:
+  // a push failure (no tokens, Expo unreachable) must never fail the reply
+  // that is already stored. sendPushToUser is a no-op with zero tokens.
+  if (staff) {
+    sendPushToUser(thread.userId, {
+      title: "True Diet - message from your dietitian",
+      body: text.length > 140 ? `${text.slice(0, 137)}...` : text,
+      data: { type: "message", threadId: thread.id },
+    }).catch(() => undefined);
+  }
 
   return c.json({ message: created, threadId: thread.id }, 201);
 });
