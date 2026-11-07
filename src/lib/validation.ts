@@ -51,6 +51,30 @@ export function validateRating(value: unknown, min = 1, max = 5): RatingValidati
   return { value: n, error: null };
 }
 
+export type WeightValidation = { value: string | null; error: string | null };
+
+/**
+ * Weight is stored as the text the member typed (same shape as profile.weight,
+ * e.g. "72" or "72.5 kg"), but must start with a single number in a sane
+ * range so the trend chart can parse it. Units are kept as typed.
+ */
+export function validateWeight(value: unknown): WeightValidation {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return { value: null, error: "Weight is required" };
+  if (raw.length > 32) return { value: null, error: "Weight must be 32 characters or fewer" };
+
+  const match = raw.match(/^(\d{1,3}(?:\.\d{1,2})?)(.*)$/);
+  if (!match) return { value: null, error: "Weight must be a number, for example 72 kg" };
+
+  const n = Number(match[1]);
+  const rest = match[2] ?? "";
+  // Any further digit means the member typed more than one number ("5000").
+  if (/\d/.test(rest)) return { value: null, error: "Weight must contain a single number, for example 72 kg" };
+  if (n < 20 || n > 500) return { value: null, error: "Weight must be between 20 and 500" };
+
+  return { value: raw, error: null };
+}
+
 export function resolveDay(value: unknown, now = new Date()): Date {
   const raw = typeof value === "string" ? value.trim() : "";
   const parsed = raw ? new Date(`${raw}T00:00:00`) : now;

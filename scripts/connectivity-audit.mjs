@@ -34,6 +34,12 @@ const endpoints = [
   { feature: "Hunger & Fullness check-in", path: "/api/hunger", method: "POST", auth: "yes", table: "hunger_checkins", screen: "HungerFullness" },
   { feature: "Hunger check-in history", path: "/api/hunger", method: "GET", auth: "yes", table: "hunger_checkins", screen: "HungerFullness" },
   { feature: "Progress chart", path: "/api/progress", method: "GET", auth: "yes", table: "meal_logs, hunger_checkins", screen: "Track, ProgressPatterns" },
+  { feature: "Weight history", path: "/api/weight", method: "GET", auth: "yes", table: "weight_entries", screen: "ProgressPatterns" },
+  { feature: "Log weight", path: "/api/weight", method: "POST", auth: "yes", table: "weight_entries", screen: "ProgressPatterns" },
+  { feature: "Remove weight entry", path: "/api/weight/00000000-0000-4000-8000-000000000000", method: "DELETE", auth: "yes", table: "weight_entries", screen: "ProgressPatterns" },
+
+  // --- staff --------------------------------------------------------------
+  { feature: "Dietitian chat page", path: "/staff", method: "GET", auth: "no", table: "(page, replies to messages)", screen: "Browser at /staff" },
 
   // --- saved content ----------------------------------------------------
   { feature: "Save article / myth / recipe / resource", path: "/api/saved", method: "POST", auth: "yes", table: "saved_items, content", screen: "Article, MythDetail, RecipeDetail, ResourceDetail" },

@@ -5,6 +5,7 @@ import { serve } from "@hono/node-server";
 import { auth } from "./lib/auth.js";
 import { isEmailConfigured } from "./lib/email.js";
 import { renderResetPage, renderVerifyPage, pageHeaders } from "./lib/auth-pages.js";
+import { STAFF_PAGE_HTML } from "./lib/staff-page.js";
 import { profileRoutes } from "./routes/profile.js";
 import { contentRoutes } from "./routes/content.js";
 import { savedRoutes } from "./routes/saved.js";
@@ -88,11 +89,11 @@ app.get("/health", async (c) => {
         where table_schema = 'public'
           and table_name in ('user','account','session','verification','profile','content',
                              'saved_items','message_threads','messages','plans','subscriptions',
-                             'entitlements','preferences','meal_logs','hunger_checkins','push_tokens',
-                             'appointments','registrations')`
+                             'entitlements','preferences','meal_logs','hunger_checkins','weight_entries',
+                             'push_tokens','appointments','registrations')`
     );
     const tableCount = Number(rows[0]?.n ?? 0);
-    const EXPECTED_TABLES = 18;
+    const EXPECTED_TABLES = 19;
     if (tableCount < EXPECTED_TABLES) {
       return c.json(
         {
@@ -171,6 +172,12 @@ app.get("/reset", (c) => {
 app.get("/verify-email", (c) => {
   const page = renderVerifyPage();
   return new Response(page.html, { status: page.status, headers: pageHeaders() });
+});
+
+// 2c. The dietitian's chat page: members message from the app, the
+// dietitian replies here with the DIETITIAN_API_KEY (x-dietitian-key).
+app.get("/staff", (c) => {
+  return new Response(STAFF_PAGE_HTML, { status: 200, headers: pageHeaders() });
 });
 
 // 3. Mount TrueDiet Profile & Assessment API

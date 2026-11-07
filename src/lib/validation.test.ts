@@ -11,6 +11,7 @@ import {
   validateMeal,
   validateMessageBody,
   validateRating,
+  validateWeight,
 } from "./validation.js";
 
 test("normalizeEmail trims and lowercases", () => {
@@ -125,4 +126,21 @@ test("nextDay returns the following midnight", () => {
   const end = nextDay(start);
   assert.equal(end.getDate(), 4);
   assert.equal(end.getHours(), 0);
+});
+
+test("validateWeight accepts plain numbers and typed units", () => {
+  assert.equal(validateWeight("72").value, "72");
+  assert.equal(validateWeight(" 72.5 kg ").value, "72.5 kg");
+  assert.equal(validateWeight("81 lb").value, "81 lb");
+});
+
+test("validateWeight rejects empty, out-of-range and multi-number input", () => {
+  assert.notEqual(validateWeight("").error, null);
+  assert.notEqual(validateWeight("   ").error, null);
+  assert.notEqual(validateWeight(null).error, null);
+  assert.notEqual(validateWeight("9").error, null);
+  assert.notEqual(validateWeight("600").error, null);
+  assert.notEqual(validateWeight("5000").error, null);
+  assert.notEqual(validateWeight("abc").error, null);
+  assert.notEqual(validateWeight("72 81").error, null);
 });

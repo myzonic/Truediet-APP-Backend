@@ -7,7 +7,7 @@ const pool = new pg.Pool({ connectionString: url });
 let pass = 0, fail = 0;
 const ok = (n, c, d = "") => { c ? (pass++, console.log(`  PASS  ${n}${d ? " - " + d : ""}`)) : (fail++, console.log(`  FAIL  ${n} ${d}`)); };
 
-const USER_TABLES = ["profile","saved_items","message_threads","subscriptions","entitlements","preferences","meal_logs","hunger_checkins","push_tokens","appointments","registrations"];
+const USER_TABLES = ["profile","saved_items","message_threads","subscriptions","entitlements","preferences","meal_logs","hunger_checkins","weight_entries","push_tokens","appointments","registrations"];
 const q = (sql, params) => pool.query(sql, params);
 const pg_indexes = async () => (await q(`SELECT indexname, indexdef FROM pg_indexes WHERE schemaname='public'`)).rows;
 
@@ -15,9 +15,9 @@ const pg_indexes = async () => (await q(`SELECT indexname, indexdef FROM pg_inde
 {
   const r = await q(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'`);
   const have = new Set(r.rows.map((x) => x.table_name));
-  const need = ["user","session","account","verification","profile","content","saved_items","message_threads","messages","plans","subscriptions","entitlements","preferences","meal_logs","hunger_checkins","push_tokens","appointments","registrations"];
+  const need = ["user","session","account","verification","profile","content","saved_items","message_threads","messages","plans","subscriptions","entitlements","preferences","meal_logs","hunger_checkins","weight_entries","push_tokens","appointments","registrations"];
   const missing = need.filter((t) => !have.has(t));
-  ok("all 18 tables exist", missing.length === 0, missing.length ? `missing=${missing}` : `${have.size} tables`);
+  ok("all 19 tables exist", missing.length === 0, missing.length ? `missing=${missing}` : `${have.size} tables`);
 }
 
 // 2. foreign keys + ON DELETE rules (user-owned rows must cascade)
@@ -84,6 +84,7 @@ const pg_indexes = async () => (await q(`SELECT indexname, indexdef FROM pg_inde
     ["messages", "thread_id"], ["subscriptions", "user_id"], ["entitlements", "user_id"],
     ["meal_logs", "user_id"], ["hunger_checkins", "user_id"], ["push_tokens", "user_id"],
     ["appointments", "user_id"], ["appointments", "booking_id"], ["registrations", "user_id"],
+    ["weight_entries", "user_id"],
   ];
   const missing = need.filter(([t, c]) => !covers(t, c)).map(([t, c]) => `${t}.${c}`);
   ok("every hot column is index-covered", missing.length === 0, missing.length ? `missing ${missing.join(", ")}` : `${need.length} covered`);
@@ -127,6 +128,7 @@ const pg_indexes = async () => (await q(`SELECT indexname, indexdef FROM pg_inde
   await q(`INSERT INTO appointments (id, user_id, slot, visit_type, status, created_at, updated_at) VALUES (gen_random_uuid(), $1,'QA','video','confirmed',now(),now())`, [uid]);
   await q(`INSERT INTO push_tokens (id, user_id, token, platform, created_at) VALUES (gen_random_uuid(), $1,'qa-token','ios',now())`, [uid]);
   await q(`INSERT INTO registrations (id, user_id, title, slug, kind, registered_at) VALUES (gen_random_uuid(), $1,'QA','qa-reg','webinar',now())`, [uid]);
+  await q(`INSERT INTO weight_entries (id, user_id, weight, recorded_at, created_at) VALUES (gen_random_uuid(), $1,'72 kg',now(),now())`, [uid]);
   await q(`INSERT INTO saved_items (id, user_id, content_id, created_at) SELECT gen_random_uuid(), $1, id, now() FROM content LIMIT 1`, [uid]);
   await q(`INSERT INTO profile (id, user_id, display_name, created_at, updated_at) VALUES (gen_random_uuid(), $1,'QA',now(),now())`, [uid]);
   const before = await q(`SELECT
@@ -135,11 +137,12 @@ const pg_indexes = async () => (await q(`SELECT indexname, indexdef FROM pg_inde
     (SELECT count(*) FROM appointments WHERE user_id=$1)::int AS appts,
     (SELECT count(*) FROM push_tokens WHERE user_id=$1)::int AS pushes,
     (SELECT count(*) FROM registrations WHERE user_id=$1)::int AS regs,
+    (SELECT count(*) FROM weight_entries WHERE user_id=$1)::int AS weights,
     (SELECT count(*) FROM saved_items WHERE user_id=$1)::int AS saved,
     (SELECT count(*) FROM profile WHERE user_id=$1)::int AS prof`, [uid]);
   const b = before.rows[0];
-  const allPresent = b.meals === 1 && b.checks === 1 && b.appts === 1 && b.pushes === 1 && b.regs === 1 && b.saved === 1 && b.prof === 1;
-  ok("cascade fixture created (7 row types)", allPresent, JSON.stringify(b));
+  const allPresent = b.meals === 1 && b.checks === 1 && b.appts === 1 && b.pushes === 1 && b.regs === 1 && b.weights === 1 && b.saved === 1 && b.prof === 1;
+  ok("cascade fixture created (8 row types)", allPresent, JSON.stringify(b));
   await q(`DELETE FROM "user" WHERE id = $1`, [uid]);
   const after = await q(`SELECT
     (SELECT count(*) FROM meal_logs WHERE user_id=$1)::int AS meals,
@@ -147,12 +150,13 @@ const pg_indexes = async () => (await q(`SELECT indexname, indexdef FROM pg_inde
     (SELECT count(*) FROM appointments WHERE user_id=$1)::int AS appts,
     (SELECT count(*) FROM push_tokens WHERE user_id=$1)::int AS pushes,
     (SELECT count(*) FROM registrations WHERE user_id=$1)::int AS regs,
+    (SELECT count(*) FROM weight_entries WHERE user_id=$1)::int AS weights,
     (SELECT count(*) FROM saved_items WHERE user_id=$1)::int AS saved,
     (SELECT count(*) FROM profile WHERE user_id=$1)::int AS prof,
     (SELECT count(*) FROM "user" WHERE id=$1)::int AS usr`, [uid]);
   const a = after.rows[0];
   const allGone = Object.values(a).every((v) => v === 0);
-  ok("DELETE user cascades all 7 row types", allGone, JSON.stringify(a));
+  ok("DELETE user cascades all 8 row types", allGone, JSON.stringify(a));
 }
 
 // 11. cross-tenant isolation at the SQL level

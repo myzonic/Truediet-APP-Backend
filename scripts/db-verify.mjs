@@ -262,6 +262,30 @@ let mealId = null;
   else fail("hunger check-in list", `status ${list.status}`);
 }
 
+// ----------------------------------------------------------- weight history
+{
+  const post = await api("/api/weight", { method: "POST", body: { weight: "72.5 kg" } });
+  const n = await countRows("weight_entries", "user_id = $1", [userId]);
+  if (post.status === 201 && n === 1) pass("weight log create", "row written");
+  else fail("weight log create", `status ${post.status} rows=${n}`);
+
+  const bad = await api("/api/weight", { method: "POST", body: { weight: "abc" } });
+  if (bad.status === 400) pass("weight validation", "invalid weight rejected - 400");
+  else fail("weight validation", `status ${bad.status}`);
+
+  const list = await api("/api/weight");
+  const entries = list.data?.entries || [];
+  if (list.status === 200 && entries.length === 1 && entries[0].weight === "72.5 kg")
+    pass("weight history list", `1 entry: ${entries[0].weight}`);
+  else fail("weight history list", `status ${list.status} count=${entries.length}`);
+
+  const id = entries[0]?.id;
+  const del = id ? await api(`/api/weight/${id}`, { method: "DELETE" }) : { status: 0 };
+  const n2 = await countRows("weight_entries", "user_id = $1", [userId]);
+  if (del.status === 200 && n2 === 0) pass("weight entry delete", "row removed");
+  else fail("weight entry delete", `status ${del.status} rows=${n2}`);
+}
+
 // ---------------------------------------------------------------- progress
 {
   const res = await api("/api/progress");

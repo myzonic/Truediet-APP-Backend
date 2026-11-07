@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { auth } from "../lib/auth.js";
 import { db } from "../db/index.js";
-import { mealLog, hungerCheckin } from "../db/schema.js";
+import { mealLog, hungerCheckin, weightEntry } from "../db/schema.js";
 import { and, desc, eq, gte, lt } from "drizzle-orm";
-import { nextDay, resolveDay, validateMeal, validateRating } from "../lib/validation.js";
+import { nextDay, parseLimit, resolveDay, validateMeal, validateRating, validateWeight } from "../lib/validation.js";
 
 type Variables = {
   user: { id: string; name: string; email: string; image?: string | null };
@@ -148,6 +148,61 @@ trackRoutes.post("/hunger", requireSession, async (c) => {
     .returning();
 
   return c.json({ checkin: created }, 201);
+});
+
+// GET /api/weight -> weight history, newest first
+trackRoutes.get("/weight", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const limit = parseLimit(c.req.query("limit"), 90, 365);
+  const entries = await db
+    .select()
+    .from(weightEntry)
+    .where(eq(weightEntry.userId, user.id))
+    .orderBy(desc(weightEntry.recordedAt), desc(weightEntry.createdAt))
+    .limit(limit);
+  return c.json({ entries });
+});
+
+// POST /api/weight { weight, recordedAt? } -> log a weighing
+trackRoutes.post("/weight", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const body = await c.req.json().catch(() => ({}));
+
+  const validated = validateWeight(body?.weight);
+  if (validated.error) return c.json({ error: validated.error }, 400);
+
+  let recordedAt = new Date();
+  if (typeof body?.recordedAt === "string" && body.recordedAt) {
+    const parsed = new Date(body.recordedAt);
+    if (!Number.isNaN(parsed.getTime())) recordedAt = parsed;
+  }
+
+  const [created] = await db
+    .insert(weightEntry)
+    .values({ userId: user.id, weight: validated.value as string, recordedAt })
+    .returning();
+
+  return c.json({ entry: created }, 201);
+});
+
+// DELETE /api/weight/:id -> remove one of the caller's entries
+trackRoutes.delete("/weight/:id", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const id = c.req.param("id");
+
+  if (!UUID_PATTERN.test(id)) {
+    return c.json({ error: "not_found", message: "Weight entry not found" }, 404);
+  }
+
+  const deleted = await db
+    .delete(weightEntry)
+    .where(and(eq(weightEntry.id, id), eq(weightEntry.userId, user.id)))
+    .returning();
+
+  if (!deleted.length) {
+    return c.json({ error: "not_found", message: "Weight entry not found" }, 404);
+  }
+  return c.json({ deleted: true });
 });
 
 // GET /api/progress -> lightweight summary across the last 7 days

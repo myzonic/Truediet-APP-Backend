@@ -109,6 +109,32 @@ console.log(`API : ${BASE}\n`);
   else fail("addCheckin() -> hunger_checkins", `status ${status} rows=${n}`);
 }
 
+// src/lib/track.ts -> addWeight() / loadWeights() / removeWeight()
+{
+  const created = await api("/api/weight", {
+    method: "POST",
+    body: { weight: "68.4 kg" },
+  });
+  const n = await count("select count(*)::int as n from weight_entries where user_id = $1 and weight = $2", [
+    userId,
+    "68.4 kg",
+  ]);
+  if (created.status === 201 && n === 1) pass("addWeight() -> weight_entries", "row persisted");
+  else fail("addWeight() -> weight_entries", `status ${created.status} rows=${n}`);
+
+  const list = await api("/api/weight");
+  const entry = (list.data?.entries || [])[0];
+  if (list.status === 200 && entry?.weight === "68.4 kg") pass("loadWeights()", `${(list.data?.entries || []).length} entry`);
+  else fail("loadWeights()", `status ${list.status}`);
+
+  const del = entry?.id
+    ? await api(`/api/weight/${entry.id}`, { method: "DELETE" })
+    : { status: 0 };
+  const n2 = await count("select count(*)::int as n from weight_entries where user_id = $1", [userId]);
+  if (del.status === 200 && n2 === 0) pass("removeWeight()", "row removed");
+  else fail("removeWeight()", `status ${del.status} rows=${n2}`);
+}
+
 // src/lib/track.ts -> loadProgress()
 {
   const { status, data } = await api("/api/progress");

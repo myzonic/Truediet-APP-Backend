@@ -265,6 +265,30 @@ export type MealLog = typeof mealLog.$inferSelect;
 export type HungerCheckin = typeof hungerCheckin.$inferSelect;
 
 // ==========================================
+// 7b. Weight history - one row per logged weighing
+// ==========================================
+
+export const weightEntry = pgTable(
+  "weight_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Stored exactly as typed (same shape as profile.weight, e.g. "72 kg");
+    // validateWeight guarantees it starts with a parseable number.
+    weight: text("weight").notNull(),
+    recordedAt: timestamp("recorded_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("weight_entries_user_id_recorded_at_idx").on(t.userId, t.recordedAt),
+  ]
+);
+
+export type WeightEntry = typeof weightEntry.$inferSelect;
+
+// ==========================================
 // 8. Push notification device tokens
 // ==========================================
 
