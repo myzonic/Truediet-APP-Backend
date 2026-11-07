@@ -114,6 +114,12 @@ app.get("/health", async (c) => {
       database: "connected",
       schema: "complete",
       tablesPresent: tableCount,
+      // Auth surface the app tailors its login screens to. Harmless to expose:
+      // neither value is a credential, they only say which options are on.
+      emailVerificationEnabled: process.env.EMAIL_VERIFICATION_ENABLED === "true",
+      googleSignInEnabled: Boolean(
+        process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ),
     });
   } catch (err: any) {
     return c.json(
