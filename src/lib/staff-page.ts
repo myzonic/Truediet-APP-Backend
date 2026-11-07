@@ -51,7 +51,7 @@ const STAFF_JS = [
   "refreshEl=document.getElementById('refresh');",
   "var current=null,poll=null;",
   "function key(){return (localStorage.getItem('truediet.staffKey')||'').trim();}",
-  "function show(msg,ok){errEl.textContent=msg||'';errEl.className=msg?(ok?'ok':'err'):'';}",
+  "function show(msg,ok){errEl.textContent=msg||'';errEl.className=msg?(ok?'ok':'err'):'';errEl.style.display=msg?'block':'none';}",
   "function api(path,method,body){",
   "  return fetch(path,{method:method||'GET',headers:{'Content-Type':'application/json','x-dietitian-key':key()},body:body?JSON.stringify(body):undefined}).then(function(r){",
   "    return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.message?('('+r.status+') '+j.message):('Request failed ('+r.status+')'));return j;});",
