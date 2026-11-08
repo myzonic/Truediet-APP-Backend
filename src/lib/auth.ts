@@ -25,6 +25,20 @@ function originOf(url: string): string {
 /** Reset links are valid for one hour; the token is single use. */
 const RESET_TOKEN_TTL_SECONDS = 3600;
 
+/**
+ * Env switches accept true/1/yes/on in any case. Dokploy values are typed by
+ * hand, and a "True" that silently behaves as false is a trap.
+ */
+export function envFlag(value: string | undefined): boolean {
+  const v = (value || "").trim().toLowerCase();
+  return v === "true" || v === "1" || v === "yes" || v === "on";
+}
+
+/** Whether sign-up sends the confirmation email (EMAIL_VERIFICATION_ENABLED). */
+export function emailVerificationEnabled(): boolean {
+  return envFlag(process.env.EMAIL_VERIFICATION_ENABLED);
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -98,7 +112,7 @@ export const auth = betterAuth({
     // approved. Enable sending (still optional) with EMAIL_VERIFICATION_ENABLED=true.
     // requireEmailVerification stays unset on purpose: enabling it would lock
     // out every existing user whose email has never been verified.
-    ...(process.env.EMAIL_VERIFICATION_ENABLED === "true" ? { sendOnSignUp: true } : {}),
+    ...(emailVerificationEnabled() ? { sendOnSignUp: true } : {}),
   },
 
   socialProviders: {

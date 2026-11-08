@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { serve } from "@hono/node-server";
-import { auth } from "./lib/auth.js";
+import { auth, emailVerificationEnabled, envFlag } from "./lib/auth.js";
 import { isEmailConfigured } from "./lib/email.js";
 import { renderResetPage, renderVerifyPage, pageHeaders } from "./lib/auth-pages.js";
 import { STAFF_PAGE_HTML } from "./lib/staff-page.js";
@@ -116,7 +116,10 @@ app.get("/health", async (c) => {
       tablesPresent: tableCount,
       // Auth surface the app tailors its login screens to. Harmless to expose:
       // neither value is a credential, they only say which options are on.
-      emailVerificationEnabled: process.env.EMAIL_VERIFICATION_ENABLED === "true",
+      // emailVerificationEnvSet distinguishes "variable missing from the
+      // container" from "variable present but not a true-ish value".
+      emailVerificationEnabled: emailVerificationEnabled(),
+      emailVerificationEnvSet: process.env.EMAIL_VERIFICATION_ENABLED !== undefined,
       googleSignInEnabled: Boolean(
         process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ),
