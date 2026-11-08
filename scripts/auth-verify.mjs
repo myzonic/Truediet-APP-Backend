@@ -215,14 +215,42 @@ console.log(`test account: ${email}\n`);
 
 // ----------------------------------------------------------------- 10. social providers
 {
+  // Two healthy states: credentials set -> a real Google consent URL must be
+  // issued with our exact callback; credentials absent -> the endpoint must
+  // fail loudly instead of redirecting with empty credentials.
+  const h = await raw("/health").catch(() => ({ status: 0, data: null }));
+  const configured = Boolean(h.data?.googleSignInEnabled);
+  const expectedCallback = `${new URL(BASE).origin}/api/auth/callback/google`;
+
   const r = await raw("/api/auth/sign-in/social", {
     method: "POST",
     body: { provider: "google", callbackURL: `${BASE}/` },
   }).catch(() => ({ status: 0, data: null }));
 
-  if (r.status >= 400 || r.status === 0)
-    pass("Google OAuth not silently misconfigured", `status=${r.status} — GOOGLE_CLIENT_ID unset in Dokploy`);
-  else fail("Google OAuth not silently misconfigured", `status=${r.status} — would redirect with empty credentials`);
+  if (configured) {
+    const url = typeof r.data?.url === "string" ? r.data.url : "";
+    const decoded = decodeURIComponent(url);
+    const ok =
+      r.status < 400 &&
+      decoded.includes("accounts.google.com") &&
+      decoded.includes(expectedCallback) &&
+      decoded.includes("client_id=");
+
+    if (ok)
+      pass(
+        "Google OAuth configured",
+        `consent URL issued, redirect_uri=${expectedCallback}`
+      );
+    else
+      fail(
+        "Google OAuth configured",
+        `status=${r.status} url=${url.slice(0, 140) || "(none)"}`
+      );
+  } else if (r.status >= 400 || r.status === 0) {
+    pass("Google OAuth not silently misconfigured", `status=${r.status} - GOOGLE_CLIENT_ID unset in Dokploy`);
+  } else {
+    fail("Google OAuth not silently misconfigured", `status=${r.status} - would redirect with empty credentials`);
+  }
 }
 
 // ----------------------------------------------------------------- 11. sign-out
