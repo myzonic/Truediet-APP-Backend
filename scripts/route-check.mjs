@@ -15,7 +15,6 @@ const routes = [
   ["/api/content", "GET", "public"],
   ["/api/plans", "GET", "public"],
   ["/api/cal/config", "GET", "public"],
-  ["/api/stream/config", "GET", "public"],
   ["/api/profile", "GET", "auth"],
   ["/api/saved", "GET", "auth"],
   ["/api/messages/threads", "GET", "auth"],

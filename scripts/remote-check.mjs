@@ -22,7 +22,6 @@ const paths = [
   "/api/subscription",
   "/api/push-tokens",
   "/api/cal/config",
-  "/api/stream/config",
 ];
 
 const stamp = Date.now();

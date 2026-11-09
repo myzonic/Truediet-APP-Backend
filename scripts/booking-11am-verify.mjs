@@ -2,10 +2,9 @@
  * Real 11:00 AM US Eastern booking against production.
  *
  * Books the earliest slot that renders as 11:00 AM in America/New_York
- * through the same three calls the app makes:
+ * through the same calls the app makes:
  *   1. POST /api/cal/bookings      - reserve the slot on Cal.com
- *   2. POST /api/stream/call       - video room (informational; Stream may be off)
- *   3. POST /api/appointments      - persist the appointment in PostgreSQL
+ *   2. POST /api/appointments      - persist the appointment in PostgreSQL
  * then reads it back via /api/appointments/current and /api/appointments.
  *
  * One throwaway account is created and left in place so the booking can be
@@ -145,22 +144,7 @@ let booking = null;
   }
 }
 
-// ----------------------------------------------------------------- 5. video room (informational)
-let callId = booking?.id ? `visit-${booking.id}` : undefined;
-{
-  const r = await api("/api/stream/call", {
-    method: "POST",
-    body: { callId, callMode: "video", callType: "default" },
-  });
-  if (r.status === 200 && r.data?.callId) {
-    callId = r.data.callId;
-    console.log(`  INFO  video room created - callId=${callId}`);
-  } else {
-    console.log(`  INFO  video room not created (status=${r.status}) - appointment still stands, callId=${callId}`);
-  }
-}
-
-// ----------------------------------------------------------------- 6. persist appointment
+// ----------------------------------------------------------------- 5. persist appointment
 let saved = null;
 if (booking?.id) {
   const label = `${etTime(start)} \u00b7 ${etLabel(start)}`;
@@ -171,7 +155,6 @@ if (booking?.id) {
       visitType: "video",
       bookingId: booking.id,
       meetingUrl: booking.meetingUrl,
-      callId,
       isoStart: booking.startTime || start,
     },
   });
@@ -195,7 +178,7 @@ if (booking?.id) {
     a.bookingId === String(booking?.id) &&
     a.meetingUrl === booking?.meetingUrl &&
     a.status === "confirmed";
-  if (ok) pass("read back current appointment", `slot="${a.slot}" isoStart=${a.isoStart} callId=${a.callId || "-"}`);
+  if (ok) pass("read back current appointment", `slot="${a.slot}" isoStart=${a.isoStart}`);
   else fail("read back current appointment", `status=${r.status} ${JSON.stringify(a).slice(0, 300)}`);
 }
 {

@@ -69,7 +69,6 @@ const endpoints = [
   { feature: "Telehealth book", path: "/api/cal/bookings", method: "POST", auth: "yes", table: "(Cal.com)", screen: "Telehealth" },
   { feature: "Appointment saved", path: "/api/appointments", method: "POST", auth: "yes", table: "appointments", screen: "Telehealth, AppointmentDetail" },
   { feature: "Appointment detail", path: "/api/appointments/current", method: "GET", auth: "yes", table: "appointments", screen: "AppointmentDetail" },
-  { feature: "Video call room", path: "/api/stream/config", method: "GET", auth: "no", table: "(Stream, no table)", screen: "VideoCall" },
 
   // --- webinars ---------------------------------------------------------
   { feature: "Webinar registration", path: "/api/registrations", method: "GET", auth: "yes", table: "registrations", screen: "WebinarDetail" },
