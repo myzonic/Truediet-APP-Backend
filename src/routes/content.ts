@@ -25,7 +25,7 @@ const routeForType: Record<string, string> = {
 type ContentRow = typeof content.$inferSelect;
 
 function summary(row: ContentRow) {
-  return {
+  const base = {
     id: row.id,
     slug: row.slug,
     type: row.type,
@@ -36,6 +36,18 @@ function summary(row: ContentRow) {
     durationMinutes: row.durationMinutes ?? undefined,
     publishedAt: row.publishedAt,
     route: routeForType[row.type] || "Article",
+  };
+  // The public list never includes a premium body; premium content stays
+  // behind the gated detail endpoint. Non-premium bodies ride along with the
+  // list so the app needs a single request instead of one per item.
+  if (row.isPremium) return base;
+  return {
+    ...base,
+    body: row.body ?? undefined,
+    mediaUrl: row.mediaUrl ?? undefined,
+    listenUrl: row.listenUrl ?? undefined,
+    episodeNumber: row.episodeNumber ?? undefined,
+    startsAt: row.startsAt ?? undefined,
   };
 }
 
