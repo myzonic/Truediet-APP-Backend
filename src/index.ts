@@ -119,6 +119,13 @@ app.get("/health", async (c) => {
       // container" from "variable present but not a true-ish value".
       emailVerificationEnabled: emailVerificationEnabled(),
       emailVerificationEnvSet: process.env.EMAIL_VERIFICATION_ENABLED !== undefined,
+      // Which mail path auth email uses, and whether SMTP creds are present
+      // (booleans/mode names only - never a credential value). "json" means
+      // messages are rendered but NOT sent.
+      emailTransport: process.env.EMAIL_TRANSPORT?.trim() || "smtp",
+      emailSmtpConfigured: Boolean(
+        process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+      ),
       googleSignInEnabled: Boolean(
         process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ),
