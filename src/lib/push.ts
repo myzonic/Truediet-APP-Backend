@@ -68,6 +68,12 @@ const EXPO_RECEIPT_URL = "https://exp.host/--/api/v2/push/getReceipts";
 const BATCH_SIZE = 100;
 const MAX_RETRIES = 3;
 
+/**
+ * Name of the Android small icon drawable shipped in the app
+ * (android/app/src/main/res/drawable*/ic_truediet_notification.png).
+ */
+const ANDROID_NOTIFICATION_ICON = "ic_truediet_notification";
+
 export interface PushInput {
   category: PushCategory;
   title: string;
@@ -97,6 +103,14 @@ interface ExpoPushMessage {
   channelId: string;
   priority: "high";
   ttl?: number;
+  /**
+   * Android small icon. It must match a drawable resource in the app
+   * (android/app/src/main/res/drawable*/ic_truediet_notification.png), which
+   * is a white-on-transparent silhouette of the True Diet fork mark - Android
+   * renders status-bar icons as flat shapes, so the colourful launcher icon
+   * cannot be used here.
+   */
+  icon?: string;
 }
 
 function authHeaders(): Record<string, string> {
@@ -227,6 +241,7 @@ export async function sendPushToUser(userId: string, input: PushInput): Promise<
         channelId,
         priority: "high",
         ttl: 60 * 60 * 24,
+        icon: ANDROID_NOTIFICATION_ICON,
       }));
 
       const result = await postExpo(EXPO_PUSH_URL, messages);
