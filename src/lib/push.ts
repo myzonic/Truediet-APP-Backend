@@ -105,8 +105,8 @@ interface ExpoPushMessage {
   ttl?: number;
   /**
    * Android small icon. It must match a drawable resource in the app
-   * (android/app/src/main/res/drawable*/ic_truediet_notification.png), which
-   * is a white-on-transparent silhouette of the True Diet fork mark - Android
+   * (res/drawable-<density>/ic_truediet_notification.png), which is a
+   * white-on-transparent silhouette of the True Diet fork mark - Android
    * renders status-bar icons as flat shapes, so the colourful launcher icon
    * cannot be used here.
    */
