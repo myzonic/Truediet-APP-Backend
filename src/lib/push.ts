@@ -1,6 +1,6 @@
 import { db } from "../db/index.js";
-import { notificationLog, preference, pushToken } from "../db/schema.js";
-import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
+import { appointment, notificationLog, preference, pushToken } from "../db/schema.js";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte } from "drizzle-orm";
 
 /**
  * Push delivery through Expo's push service.
@@ -339,7 +339,48 @@ export async function sweepPendingReceipts(): Promise<void> {
 export function startPushReceiptWorker(): void {
   const timer = setInterval(() => {
     sweepPendingReceipts().catch(() => undefined);
+    sendAppointmentReminders().catch(() => undefined);
   }, 5 * 60 * 1000);
   // Do not hold the process open just for this.
   timer.unref?.();
+}
+
+/**
+ * Reminds members about confirmed visits happening roughly 24 hours from now.
+ *
+ * Runs on the same five-minute interval as the receipt sweep, so no extra
+ * scheduler or paid cron service is needed. The dedupe key includes the date,
+ * so a reminder is sent once per visit even though the sweep keeps running.
+ */
+export async function sendAppointmentReminders(): Promise<void> {
+  const from = new Date(Date.now() + 23 * 60 * 60 * 1000);
+  const to = new Date(Date.now() + 24.5 * 60 * 60 * 1000);
+
+  const upcoming = await db
+    .select({
+      id: appointment.id,
+      userId: appointment.userId,
+      slot: appointment.slot,
+      isoStart: appointment.isoStart,
+    })
+    .from(appointment)
+    .where(
+      and(
+        eq(appointment.status, "confirmed"),
+        gte(appointment.isoStart, from),
+        lte(appointment.isoStart, to)
+      )
+    )
+    .limit(200);
+
+  for (const row of upcoming) {
+    const day = row.isoStart ? new Date(row.isoStart).toISOString().slice(0, 10) : "unknown";
+    await sendPushToUser(row.userId, {
+      category: "appointments",
+      title: "Appointment tomorrow",
+      body: `Your nutrition visit is coming up: ${row.slot}.`,
+      data: { type: "appointment", appointmentId: row.id, screen: "AppointmentDetail" },
+      dedupeKey: `appointment-reminder:${row.id}:${day}`,
+    });
+  }
 }
