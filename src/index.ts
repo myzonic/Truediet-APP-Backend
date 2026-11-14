@@ -15,6 +15,7 @@ import { preferenceRoutes } from "./routes/preferences.js";
 import { accountRoutes } from "./routes/account.js";
 import { trackRoutes } from "./routes/track.js";
 import { pushRoutes } from "./routes/push.js";
+import { startPushReceiptWorker } from "./lib/push.js";
 import { calRoutes } from "./routes/cal.js";
 import { calWebhookRoutes, calWebhookAltRoutes } from "./routes/cal-webhook.js";
 import { appointmentRoutes } from "./routes/appointments.js";
@@ -89,10 +90,10 @@ app.get("/health", async (c) => {
           and table_name in ('user','account','session','verification','profile','content',
                              'saved_items','message_threads','messages','plans','subscriptions',
                              'entitlements','preferences','meal_logs','hunger_checkins','weight_entries',
-                             'push_tokens','appointments','registrations')`
+                             'push_tokens','appointments','registrations','notification_log')`
     );
     const tableCount = Number(rows[0]?.n ?? 0);
-    const EXPECTED_TABLES = 19;
+    const EXPECTED_TABLES = 20;
     if (tableCount < EXPECTED_TABLES) {
       return c.json(
         {
@@ -269,6 +270,10 @@ async function startServer() {
   // Server start
   const port = Number(process.env.PORT) || 3000;
   console.log(`Starting TrueDiet backend on port ${port}...`);
+
+  // Fetch Expo push receipts for anything that did not get checked when it was
+  // sent (a deploy in between, or a slow Expo response).
+  startPushReceiptWorker();
 
   serve({
     fetch: app.fetch,

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { auth } from "../lib/auth.js";
 import { db } from "../db/index.js";
 import { appointment } from "../db/schema.js";
+import { sendPushToUser } from "../lib/push.js";
 import { and, desc, eq, ne } from "drizzle-orm";
 
 type Variables = {
@@ -113,6 +114,16 @@ appointmentRoutes.post("/", async (c) => {
         .where(eq(appointment.id, existing.id))
         .returning();
 
+      // Same booking submitted again with a different time is a reschedule.
+      if (existing.slot !== slot) {
+        sendPushToUser(user.id, {
+          category: "appointments",
+          title: "Appointment rescheduled",
+          body: `Your nutrition visit moved to ${slot}.`,
+          data: { type: "appointment", appointmentId: updated?.id, screen: "AppointmentDetail" },
+        }).catch(() => undefined);
+      }
+
       return c.json({ appointment: updated }, 200);
     }
   }
@@ -130,6 +141,19 @@ appointmentRoutes.post("/", async (c) => {
       status,
     })
     .returning();
+
+  // Confirmation is only sent when the booking is real (a Cal.com booking id
+  // exists). "requested" rows come from the in-app request flow and have no
+  // confirmed time to announce.
+  if (created && bookingId) {
+    sendPushToUser(user.id, {
+      category: "appointments",
+      title: "Appointment confirmed",
+      body: `Your nutrition visit is confirmed for ${slot}.`,
+      data: { type: "appointment", appointmentId: created.id, screen: "AppointmentDetail" },
+      dedupeKey: `appointment-confirmed:${created.id}`,
+    }).catch(() => undefined);
+  }
 
   return c.json({ appointment: created }, 201);
 });
@@ -156,6 +180,17 @@ appointmentRoutes.patch("/:id", async (c) => {
   if (!updated) {
     return c.json({ error: "not_found", message: "Appointment not found" }, 404);
   }
+
+  if (status === "cancelled") {
+    sendPushToUser(user.id, {
+      category: "appointments",
+      title: "Appointment cancelled",
+      body: `Your nutrition visit (${updated.slot}) has been cancelled.`,
+      data: { type: "appointment", appointmentId: updated.id, screen: "Telehealth" },
+      dedupeKey: `appointment-cancelled:${updated.id}`,
+    }).catch(() => undefined);
+  }
+
   return c.json({ appointment: updated });
 });
 
@@ -172,5 +207,14 @@ appointmentRoutes.delete("/:id", async (c) => {
   if (!deleted.length) {
     return c.json({ error: "not_found", message: "Appointment not found" }, 404);
   }
+
+  sendPushToUser(user.id, {
+    category: "appointments",
+    title: "Appointment cancelled",
+    body: `Your nutrition visit (${deleted[0].slot}) has been cancelled.`,
+    data: { type: "appointment", appointmentId: deleted[0].id, screen: "Telehealth" },
+    dedupeKey: `appointment-cancelled:${deleted[0].id}`,
+  }).catch(() => undefined);
+
   return c.json({ deleted: true });
 });

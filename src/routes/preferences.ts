@@ -26,12 +26,32 @@ preferenceRoutes.use("*", async (c, next) => {
   await next();
 });
 
-const NOTIFICATION_KEYS = ["push", "messages", "appointments", "webinars", "content"];
+const NOTIFICATION_KEYS = [
+  "push",
+  "messages",
+  "appointments",
+  "webinars",
+  "content",
+  "tracking",
+  "media",
+  "security",
+];
 const ACCESSIBILITY_KEYS = ["largerText", "reduceMotion"];
 const CONSENT_KEYS = ["personalization", "analytics"];
 
 const DEFAULTS = {
-  notifications: { push: true, messages: true, appointments: true, webinars: true, content: false },
+  notifications: {
+    push: true,
+    messages: true,
+    appointments: true,
+    webinars: true,
+    content: false,
+    tracking: false,
+    media: false,
+    // Security notices stay on; the push service treats this category as
+    // always-on even if the stored value says otherwise.
+    security: true,
+  },
   accessibility: { largerText: false, reduceMotion: false },
   consents: { personalization: true, analytics: false },
 };

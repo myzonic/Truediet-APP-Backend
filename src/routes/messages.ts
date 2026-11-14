@@ -191,7 +191,9 @@ messageRoutes.post("/", async (c) => {
   // that is already stored. sendPushToUser is a no-op with zero tokens.
   if (staff) {
     sendPushToUser(thread.userId, {
+      category: "messages",
       title: "True Diet - message from your dietitian",
+      // The body is a short preview; it never repeats the member's own data.
       body: text.length > 140 ? `${text.slice(0, 137)}...` : text,
       data: { type: "message", threadId: thread.id },
     }).catch(() => undefined);

@@ -299,12 +299,45 @@ export const pushToken = pgTable("push_tokens", {
     .references(() => user.id, { onDelete: "cascade" }),
   token: text("token").notNull().unique(),
   platform: text("platform").notNull().default("unknown"),
+  // Stable per-install identifier from expo-application. Lets one device
+  // replace its own token (Expo can reissue tokens) without touching the
+  // member's other devices.
+  deviceId: text("device_id"),
+  isActive: boolean("is_active").notNull().default(true),
+  lastSeenAt: timestamp("last_seen_at"),
+  lastSuccessAt: timestamp("last_success_at"),
+  lastError: text("last_error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => [
   index("push_tokens_user_id_idx").on(t.userId),
+  index("push_tokens_user_active_idx").on(t.userId, t.isActive),
 ]);
 
 export type PushToken = typeof pushToken.$inferSelect;
+
+// Every push the backend attempts, plus the Expo ticket ids needed to fetch
+// receipts later. Also the dedupe ledger: a unique (user_id, dedupe_key) index
+// stops the same event being delivered twice.
+export const notificationLog = pgTable("notification_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  data: jsonb("data").$type<Record<string, unknown>>(),
+  dedupeKey: text("dedupe_key"),
+  deliveries: integer("deliveries").notNull().default(0),
+  tickets: jsonb("tickets").$type<Array<{ token: string; ticketId?: string }>>(),
+  receiptCheckedAt: timestamp("receipt_checked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  index("notification_log_user_created_idx").on(t.userId, t.createdAt),
+]);
+
+export type NotificationLog = typeof notificationLog.$inferSelect;
 
 // ==========================================
 // 9. Telehealth appointments
