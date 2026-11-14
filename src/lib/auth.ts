@@ -52,6 +52,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
+    maxPasswordLength: 128,
     // Explicit so the lifetime is a documented value rather than an implicit
     // default. The token row lives in `verification` and is deleted on use.
     resetPasswordTokenExpiresIn: RESET_TOKEN_TTL_SECONDS,
@@ -125,6 +126,66 @@ export const auth = betterAuth({
         }
       : {}),
   },
+
+  /**
+   * Sessions. A session is refreshed at most once a day, so an active member
+   * stays signed in for a week without a refresh write on every request.
+   */
+  session: {
+    expiresIn: 60 * 60 * 24 * 7,
+    updateAge: 60 * 60 * 24,
+  },
+
+  /**
+   * Linking policy, stated explicitly for review.
+   *
+   * Only Google may be linked implicitly, and only when the existing local
+   * account has a verified email (Better Auth's `requireLocalEmailVerified`
+   * default). That is what stops somebody pre-registering an unverified
+   * account at a victim's address and inheriting their Google identity.
+   */
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google"],
+    },
+  },
+
+  /**
+   * Brute-force protection.
+   *
+   * Better Auth only applies its default limits in production, which would
+   * leave a staging deploy open. These rules are explicit and tighter than
+   * the default 100 requests per window on the endpoints worth attacking.
+   */
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 10 },
+      "/sign-up/email": { window: 60, max: 5 },
+      "/sign-in/social": { window: 60, max: 15 },
+      "/request-password-reset": { window: 300, max: 5 },
+      "/send-verification-email": { window: 300, max: 5 },
+      "/reset-password": { window: 300, max: 10 },
+      "/change-password": { window: 300, max: 10 },
+      "/delete-user": { window: 300, max: 5 },
+    },
+  },
+
+  advanced: {
+    // Cookies must never travel over plain HTTP in production. Derived from the
+    // configured base URL rather than NODE_ENV, which a container may not set.
+    useSecureCookies: (process.env.BETTER_AUTH_URL || "").startsWith("https://"),
+    ipAddress: {
+      // The API runs behind Traefik, which appends the client address to
+      // X-Forwarded-For. Without this every request would key on the proxy IP
+      // and one abuser would throttle everybody.
+      ipAddressHeaders: ["x-forwarded-for"],
+    },
+  },
+
   trustedOrigins: [
     "http://localhost:8081",
     "http://localhost:19006",
