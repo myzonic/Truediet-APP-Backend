@@ -70,7 +70,7 @@ const MAX_RETRIES = 3;
 
 /**
  * Name of the Android small icon drawable shipped in the app
- * (android/app/src/main/res/drawable*/ic_truediet_notification.png).
+ * (res/drawable-<density>/ic_truediet_notification.png).
  */
 const ANDROID_NOTIFICATION_ICON = "ic_truediet_notification";
 
