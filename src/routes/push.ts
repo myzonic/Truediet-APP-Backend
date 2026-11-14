@@ -67,6 +67,39 @@ pushRoutes.get("/history", async (c) => {
   return c.json({ notifications: rows });
 });
 
+// GET /api/push-tokens/diagnostics?userId=... -> staff-only health check.
+// Reports counts and status only - never a token value - so support can see
+// why a member is not receiving notifications.
+pushRoutes.get("/diagnostics", async (c) => {
+  if (!c.get("staff")) {
+    return c.json({ error: "forbidden", message: "Staff access required" }, 403);
+  }
+  const userId = c.req.query("userId") || "";
+  if (!userId) {
+    return c.json({ error: "invalid_request", message: "userId is required" }, 400);
+  }
+
+  const rows = await db
+    .select({
+      platform: pushToken.platform,
+      deviceId: pushToken.deviceId,
+      isActive: pushToken.isActive,
+      createdAt: pushToken.createdAt,
+      lastSeenAt: pushToken.lastSeenAt,
+      lastSuccessAt: pushToken.lastSuccessAt,
+      lastError: pushToken.lastError,
+    })
+    .from(pushToken)
+    .where(eq(pushToken.userId, userId));
+
+  return c.json({
+    userId,
+    total: rows.length,
+    active: rows.filter((r) => r.isActive).length,
+    devices: rows,
+  });
+});
+
 // POST /api/push-tokens { token, platform, deviceId } -> register this device
 pushRoutes.post("/", async (c) => {
   const user = c.get("user") as { id: string };
