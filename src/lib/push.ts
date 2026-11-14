@@ -82,6 +82,10 @@ export interface PushResult {
   sent: number;
   failed: number;
   skipped?: "no_tokens" | "preference" | "duplicate";
+  /** Expo error codes, e.g. InvalidCredentials, DeviceNotRegistered. */
+  errors?: string[];
+  /** HTTP status when Expo rejected the whole batch. */
+  httpStatus?: number;
 }
 
 interface ExpoPushMessage {
@@ -209,6 +213,8 @@ export async function sendPushToUser(userId: string, input: PushInput): Promise<
     const invalid: string[] = [];
     const deliveredTokens: string[] = [];
     const tickets: Array<{ token: string; ticketId?: string }> = [];
+    const errors: string[] = [];
+    let httpStatus: number | undefined;
 
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const chunk = rows.slice(i, i + BATCH_SIZE);
@@ -225,7 +231,9 @@ export async function sendPushToUser(userId: string, input: PushInput): Promise<
 
       const result = await postExpo(EXPO_PUSH_URL, messages);
       if (!result.ok) {
+        httpStatus = result.status;
         failed += messages.length;
+        errors.push(`http_${result.status}`);
         await db
           .update(pushToken)
           .set({ lastError: `send_${result.status}`, updatedAt: new Date() })
@@ -244,6 +252,7 @@ export async function sendPushToUser(userId: string, input: PushInput): Promise<
         }
         failed += 1;
         const errorCode = ticket?.details?.error;
+        if (errorCode) errors.push(String(errorCode));
         // DeviceNotRegistered / InvalidCredentials never recover on their own.
         if (errorCode === "DeviceNotRegistered" || errorCode === "InvalidCredentials") {
           invalid.push(message.to);
@@ -275,7 +284,7 @@ export async function sendPushToUser(userId: string, input: PushInput): Promise<
       if (tickets.length) setTimeout(() => void checkReceipts(logId!), 20_000).unref?.();
     }
 
-    return { sent, failed };
+    return { sent, failed, errors: errors.length ? errors : undefined, httpStatus };
   } catch {
     return { sent: 0, failed: 0 };
   }

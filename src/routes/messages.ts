@@ -186,18 +186,22 @@ messageRoutes.post("/", async (c) => {
     .set({ lastMessageAt: new Date() })
     .where(eq(messageThread.id, thread.id));
 
-  // Alert the member's devices about the dietitian's reply. Fire-and-forget:
-  // a push failure (no tokens, Expo unreachable) must never fail the reply
-  // that is already stored. sendPushToUser is a no-op with zero tokens.
+  // Alert the member's devices about the dietitian's reply.
+  //
+  // The result is awaited (rather than fired and forgotten) so the dietitian
+  // can see whether the member's device was actually reached - a stored reply
+  // with no notification is a common support question. A push failure never
+  // fails the reply itself: the message is already stored either way.
+  let push: { sent: number; failed: number; skipped?: string } | undefined;
   if (staff) {
-    sendPushToUser(thread.userId, {
+    push = await sendPushToUser(thread.userId, {
       category: "messages",
       title: "True Diet - message from your dietitian",
       // The body is a short preview; it never repeats the member's own data.
       body: text.length > 140 ? `${text.slice(0, 137)}...` : text,
       data: { type: "message", threadId: thread.id },
-    }).catch(() => undefined);
+    }).catch(() => ({ sent: 0, failed: 0 }));
   }
 
-  return c.json({ message: created, threadId: thread.id }, 201);
+  return c.json({ message: created, threadId: thread.id, ...(push ? { push } : {}) }, 201);
 });
