@@ -203,5 +203,18 @@ diagnosticsRoutes.get("/email", async (c) => {
     )
   );
 
+  // portquiz.net answers on every TCP port. Probing it separates "the outbound
+  // port is blocked" from "this specific mail host is unreachable": if portquiz
+  // answers on 465 but Titan does not, the port is open and the mail host is
+  // dropping us.
+  result.portquiz = Object.fromEntries(
+    await Promise.all(
+      ([25, 465, 587, 2525, 143, 80, 443] as number[]).map(async (p) => [
+        String(p),
+        await tcpProbe("portquiz.net", p, 6000),
+      ])
+    )
+  );
+
   return c.json(result);
 });
