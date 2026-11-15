@@ -146,5 +146,25 @@ diagnosticsRoutes.get("/email", async (c) => {
     result.starttls587 = await starttlsProbe(host, 587);
   }
 
+  // Characterise the block: compare a plain HTTPS host, DNS, the IMAP ports of
+  // the same mail host, and the alternate submission port 2525. This tells us
+  // whether the firewall drops every non-443 port, only SMTP ports, or only
+  // this mail host.
+  result.egress = Object.fromEntries(
+    await Promise.all(
+      (
+        [
+          ["1.1.1.1", 443],
+          ["8.8.8.8", 53],
+          ["smtp.titan.email", 143],
+          ["smtp.titan.email", 993],
+          ["smtp.titan.email", 2525],
+          ["smtp.titan.email", 25],
+          ["smtp.titan.email", 587],
+        ] as Array<[string, number]>
+      ).map(async ([h, p]) => [`${h}:${p}`, await tcpProbe(h, p, 6000)])
+    )
+  );
+
   return c.json(result);
 });
