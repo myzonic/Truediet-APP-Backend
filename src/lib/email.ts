@@ -18,6 +18,12 @@ import type { Transporter } from "nodemailer";
  *
  *   EMAIL_TRANSPORT=json   test mode: nodemailer jsonTransport, no network is
  *                          opened, no email leaves the machine. Used by tests.
+ *
+ *   EMAIL_TRANSPORT=resend fallback mode: send over HTTPS (port 443) through
+ *                          the Resend API instead of SMTP. Used when the host
+ *                          blocks outbound SMTP ports (25/465/587).
+ *   RESEND_API_KEY         Resend API key (never committed, never printed)
+ *   RESEND_API_BASE        optional override, defaults to https://api.resend.com
  */
 
 export interface AuthEmailInput {
@@ -38,6 +44,7 @@ export interface AuthEmailResult {
 /** True only when every credential required to actually send is present. */
 export function isEmailConfigured(): boolean {
   if (isTestTransport()) return true;
+  if (isResendTransport()) return Boolean(resendApiKey());
   return Boolean(
     process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
   );
@@ -45,6 +52,22 @@ export function isEmailConfigured(): boolean {
 
 export function isTestTransport(): boolean {
   return process.env.EMAIL_TRANSPORT === "json";
+}
+
+/**
+ * HTTPS transport. Selected explicitly with EMAIL_TRANSPORT=resend so it can
+ * never switch on by accident - the SMTP path stays the default.
+ */
+export function isResendTransport(): boolean {
+  return (process.env.EMAIL_TRANSPORT || "").trim().toLowerCase() === "resend";
+}
+
+function resendApiKey(): string {
+  return (process.env.RESEND_API_KEY || "").trim();
+}
+
+function resendApiBase(): string {
+  return (process.env.RESEND_API_BASE || "https://api.resend.com").replace(/\/+$/, "");
 }
 
 /** The mailbox that mail is sent from. Falls back to the SMTP username. */
@@ -70,6 +93,9 @@ export function describeTransport(): {
 } {
   if (isTestTransport()) {
     return { mode: "json (no email is sent)", from: getFromAddress() };
+  }
+  if (isResendTransport()) {
+    return { mode: "resend (https)", from: getFromAddress() };
   }
   return {
     mode: "smtp",
@@ -135,6 +161,48 @@ function safeReason(err: unknown): string {
 }
 
 /**
+ * Sends one message through the Resend HTTPS API (port 443).
+ *
+ * Used only when EMAIL_TRANSPORT=resend. Returns the same shape as the SMTP
+ * path and never throws, so a provider outage cannot fail an auth request.
+ */
+async function sendViaResend(input: AuthEmailInput): Promise<AuthEmailResult> {
+  const key = resendApiKey();
+  if (!key) return { ok: false, error: "email_not_configured" };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const res = await fetch(`${resendApiBase()}/emails`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: getFromAddress(),
+        to: [input.to],
+        subject: input.subject,
+        text: input.text,
+        html: input.html,
+      }),
+      signal: controller.signal,
+    });
+    const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string; name?: string };
+    if (!res.ok) {
+      // The provider's error name is safe to log; it never contains the key.
+      return { ok: false, error: body?.name || body?.message || `http ${res.status}` };
+    }
+    return { ok: true, messageId: body?.id };
+  } catch (err) {
+    const e = err as { name?: string; code?: string };
+    return { ok: false, error: e?.code || (e?.name === "AbortError" ? "timeout" : e?.name || "email transport failed") };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Sends one transactional message.
  *
  * Never throws: a failure is returned so the caller can decide what the user
@@ -143,6 +211,10 @@ function safeReason(err: unknown): string {
 export async function sendAuthEmail(input: AuthEmailInput): Promise<AuthEmailResult> {
   if (!isEmailConfigured()) {
     return { ok: false, error: "email_not_configured" };
+  }
+
+  if (isResendTransport()) {
+    return sendViaResend(input);
   }
 
   try {
@@ -175,6 +247,27 @@ export function resetTransportCache(): void {
 export async function verifyConnection(): Promise<{ ok: boolean; error?: string }> {
   if (isTestTransport()) return { ok: true };
   if (!isEmailConfigured()) return { ok: false, error: "email_not_configured" };
+
+  // The Resend path has no persistent connection to verify; instead confirm the
+  // API key is accepted (an authenticated read that sends nothing).
+  if (isResendTransport()) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(`${resendApiBase()}/domains`, {
+        headers: { Authorization: `Bearer ${resendApiKey()}` },
+        signal: controller.signal,
+      });
+      if (res.ok) return { ok: true };
+      return { ok: false, error: `http ${res.status}` };
+    } catch (err) {
+      const e = err as { name?: string; code?: string };
+      return { ok: false, error: e?.code || (e?.name === "AbortError" ? "timeout" : e?.name || "failed") };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   try {
     await getTransporter().verify();
     return { ok: true };
