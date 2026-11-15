@@ -14,3 +14,7 @@ export const pool = new Pool({
 });
 
 export const db = drizzle(pool, { schema });
+
+// Alias used by the custom auth routes and helpers so they read the same
+// instance (and therefore the same schema) as the rest of the API.
+export const drizzleDB = db;

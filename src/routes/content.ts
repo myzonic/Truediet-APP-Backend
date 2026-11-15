@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { db } from "../db/index.js";
 import { content, entitlement, subscription } from "../db/schema.js";
-import { auth } from "../lib/auth.js";
 import { parseLimit } from "../lib/validation.js";
 import { and, desc, eq, ilike } from "drizzle-orm";
+import { getAuthUserFromRequest } from "../lib/session.js";
 
 type Variables = {
   user: { id: string; name: string; email: string; image?: string | null };
@@ -82,8 +82,8 @@ contentRoutes.get("/:slug", async (c) => {
   }
 
   if (row.isPremium) {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers });
-    if (!session?.user) {
+    const user = await getAuthUserFromRequest(c);
+    if (!user) {
       return c.json({ error: "unauthorized", message: "Authentication required" }, 401);
     }
 
@@ -91,13 +91,13 @@ contentRoutes.get("/:slug", async (c) => {
     const [entitled] = await db
       .select({ key: entitlement.key })
       .from(entitlement)
-      .where(and(eq(entitlement.userId, session.user.id), eq(entitlement.key, "premium_content")))
+      .where(and(eq(entitlement.userId, user.id), eq(entitlement.key, "premium_content")))
       .limit(1);
 
     const [sub] = await db
       .select({ status: subscription.status })
       .from(subscription)
-      .where(eq(subscription.userId, session.user.id))
+      .where(eq(subscription.userId, user.id))
       .limit(1);
 
     const hasAccess =

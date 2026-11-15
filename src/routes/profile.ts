@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { auth } from "../lib/auth.js";
 import { db } from "../db/index.js";
 import { profile } from "../db/schema.js";
 import { eq } from "drizzle-orm";
+import { getAuthUserFromRequest } from "../lib/session.js";
 
 type Variables = {
   user: { id: string; name: string; email: string; image?: string | null };
@@ -11,18 +11,14 @@ type Variables = {
 
 export const profileRoutes = new Hono<{ Variables: Variables }>();
 
-// Middleware: Authenticate request using Better Auth session
+// Middleware: Authenticate request using the custom bearer-JWT session
 profileRoutes.use("*", async (c, next) => {
-  const session = await auth.api.getSession({
-    headers: c.req.raw.headers,
-  });
-
-  if (!session?.user) {
+  const user = await getAuthUserFromRequest(c);
+  if (!user) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-
-  c.set("user", session.user);
-  c.set("session", session.session);
+  c.set("user", { id: user.id, name: user.name, email: user.email, image: user.image });
+  c.set("session", { id: "", userId: user.id, token: "", expiresAt: new Date() });
   await next();
 });
 

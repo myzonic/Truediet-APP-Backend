@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { auth } from '../lib/auth.js';
 import { fetchCalSlots, getCalConfigData, isCalConfigured, makeCalBooking } from '../lib/cal.js';
+import { getAuthUserFromRequest } from '../lib/session.js';
 
 type Variables = {
   user?: { id: string; name: string; email: string };
@@ -43,8 +43,8 @@ calRoutes.post('/bookings', async (c) => {
 
   // Booking a real appointment on a dietitian's calendar must be tied to a
   // real account, otherwise anyone could book or spam the calendar.
-  const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
-  if (!session?.user) {
+  const user = await getAuthUserFromRequest(c);
+  if (!user) {
     return c.json({ error: 'unauthorized', message: 'Authentication required' }, 401);
   }
 
@@ -67,8 +67,8 @@ calRoutes.post('/bookings', async (c) => {
 
   // The attendee identity always comes from the session, never from the
   // request body.
-  const bookerName = session.user.name || 'True Diet Member';
-  const bookerEmail = session.user.email;
+  const bookerName = user.name || 'True Diet Member';
+  const bookerEmail = user.email;
 
   const safeNotes = typeof notes === 'string' ? notes.trim().slice(0, 2000) : undefined;
   const safeTimeZone = typeof timeZone === 'string' && /^[A-Za-z_+-]+\/[A-Za-z_+-]+$/.test(timeZone)

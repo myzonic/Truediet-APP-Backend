@@ -19,13 +19,10 @@
     "routes:check": "node scripts/route-check.mjs",
     "test:auth-email": "node scripts/auth-email-flow.mjs",
     "test:smtp": "node scripts/email-smtp.mjs",
-    "test": "tsx --test src/lib/validation.test.ts src/lib/email.test.ts",
-    "auth:generate": "auth generate --config ./src/lib/auth.ts"
+    "test": "tsx --test src/lib/validation.test.ts src/lib/email.test.ts"
   },
   "dependencies": {
-    "@better-auth/expo": "^1.7.18",
     "@hono/node-server": "^1.13.7",
-    "better-auth": "^1.7.18",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.6.14",

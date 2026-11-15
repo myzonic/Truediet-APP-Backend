@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { auth } from "../lib/auth.js";
 import { db } from "../db/index.js";
 import { entitlement, plan, subscription } from "../db/schema.js";
 import { and, eq } from "drizzle-orm";
+import { getAuthUserFromRequest } from "../lib/session.js";
 
 type Variables = {
   user: { id: string; name: string; email: string; image?: string | null };
@@ -18,8 +18,8 @@ function paymentsConfigured(): boolean {
 }
 
 async function currentUser(c: any) {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  return session?.user ?? null;
+  const user = await getAuthUserFromRequest(c);
+  return user;
 }
 
 async function entitlementsFor(userId: string): Promise<string[]> {

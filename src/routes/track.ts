@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import { auth } from "../lib/auth.js";
 import { db } from "../db/index.js";
 import { mealLog, hungerCheckin, weightEntry } from "../db/schema.js";
 import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { nextDay, parseLimit, resolveDay, validateMeal, validateRating, validateWeight } from "../lib/validation.js";
+import { getAuthUserFromRequest } from "../lib/session.js";
 
 type Variables = {
   user: { id: string; name: string; email: string; image?: string | null };
@@ -21,14 +21,14 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * unrelated public endpoints such as `/api/content` and `/api/plans`.
  */
 async function requireSession(c: any, next: any) {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  const user = await getAuthUserFromRequest(c);
 
-  if (!session?.user) {
+  if (!user) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  c.set("user", session.user);
-  c.set("session", session.session);
+  c.set("user", { id: user.id, name: user.name, email: user.email, image: user.image });
+  c.set("session", { id: "", userId: user.id, token: "", expiresAt: new Date() });
   await next();
 }
 

@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import crypto from "node:crypto";
-import { auth } from "../lib/auth.js";
 import { db } from "../db/index.js";
 import { message, messageThread, user as userTable } from "../db/schema.js";
 import { validateMessageBody } from "../lib/validation.js";
 import { sendPushToUser } from "../lib/push.js";
 import { and, asc, desc, eq } from "drizzle-orm";
+import { getAuthUserFromRequest } from "../lib/session.js";
 
 type Variables = {
   user?: { id: string; name: string; email: string; image?: string | null };
@@ -48,11 +48,11 @@ messageRoutes.use("*", async (c, next) => {
     return;
   }
 
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session?.user) {
+  const user = await getAuthUserFromRequest(c);
+  if (!user) {
     return c.json({ error: "unauthorized", message: "Authentication required" }, 401);
   }
-  c.set("user", session.user);
+  c.set("user", { id: user.id, name: user.name, email: user.email, image: user.image });
   await next();
 });
 

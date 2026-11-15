@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import crypto from "node:crypto";
-import { auth } from "../lib/auth.js";
 import { db } from "../db/index.js";
 import { notificationLog, pushToken } from "../db/schema.js";
 import { and, desc, eq, ne } from "drizzle-orm";
+import { getAuthUserFromRequest } from "../lib/session.js";
 
 type Variables = {
   user: { id: string; name: string; email: string; image?: string | null };
@@ -43,12 +43,12 @@ pushRoutes.use("*", async (c, next) => {
     return;
   }
 
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session?.user) {
+  const user = await getAuthUserFromRequest(c);
+  if (!user) {
     return c.json({ error: "unauthorized", message: "Authentication required" }, 401);
   }
-  c.set("user", session.user);
-  c.set("session", session.session);
+  c.set("user", { id: user.id, name: user.name, email: user.email, image: user.image });
+  c.set("session", { id: "", userId: user.id, token: "", expiresAt: new Date() });
   await next();
 });
 

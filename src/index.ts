@@ -2,12 +2,12 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { serve } from "@hono/node-server";
-import { auth, emailVerificationEnabled, envFlag } from "./lib/auth.js";
 import { isEmailConfigured } from "./lib/email.js";
 import { renderResetPage, renderVerifyPage, pageHeaders } from "./lib/auth-pages.js";
 import { STAFF_PAGE_HTML } from "./lib/staff-page.js";
 import { profileRoutes } from "./routes/profile.js";
 import { contentRoutes } from "./routes/content.js";
+import { resourceRoutes } from "./routes/resource.js";
 import { savedRoutes } from "./routes/saved.js";
 import { messageRoutes } from "./routes/messages.js";
 import { subscriptionRoutes } from "./routes/subscription.js";
@@ -24,6 +24,8 @@ import { diagnosticsRoutes } from "./routes/diagnostics.js";
 import { seedContent } from "./db/seed.js";
 import { pool } from "./db/index.js";
 import * as dotenv from "dotenv";
+
+import auth from "./routes/auth.js";
 
 dotenv.config();
 
@@ -79,9 +81,7 @@ app.use(
 );
 
 // 1. Health-check endpoint
-// The check verifies that the expected tables exist, not just that the
-// connection works. A database with a missing table would otherwise report
-// "ok" while every endpoint failed.
+// The check verifies that the expected tables exist, not just that the connection works.
 app.get("/health", async (c) => {
   try {
     await pool.query("SELECT 1");
@@ -115,14 +115,12 @@ app.get("/health", async (c) => {
       database: "connected",
       schema: "complete",
       tablesPresent: tableCount,
-      // Auth surface the app tailors its login screens to. Harmless to expose:
-      // neither value is a credential, they only say which options are on.
-      // emailVerificationEnvSet distinguishes "variable missing from the
-      // container" from "variable present but not a true-ish value".
-      emailVerificationEnabled: emailVerificationEnabled(),
+      // Auth surface the app tailors its login screens to. Harmless to expose: neither value is a credential, they only say which options are on.
+      // emailVerificationEnvSet distinguishes "variable missing from the container" from "variable present but not a true-ish value".
+      emailVerificationEnabled: isEmailConfigured(),
       emailVerificationEnvSet: process.env.EMAIL_VERIFICATION_ENABLED !== undefined,
       // Which mail path auth email uses, and whether SMTP creds are present
-      // (booleans/mode names only - never a credential value). "json" means
+      // booleans and mode names only - never a credential value. json means
       // messages are rendered but NOT sent.
       emailTransport: process.env.EMAIL_TRANSPORT?.trim() || "smtp",
       emailSmtpConfigured: Boolean(
@@ -145,38 +143,8 @@ app.get("/health", async (c) => {
   }
 });
 
-// Guard for auth email endpoints.
-//
-// Better Auth runs sendResetPassword inside runInBackgroundOrAwait, which
-// swallows every error, so a missing or broken SMTP configuration would still
-// answer {status:true} and the app would tell the user to check their inbox
-// when no email could possibly be sent. Checking the configuration before
-// delegating is the only point where a truthful failure can be returned. The
-// check is independent of the address, so it cannot be used to discover
-// whether an account exists.
-//
-// The guard lives inside this single handler on purpose: Hono fails to match
-// the `/api/auth/**` wildcard once any other concrete path is registered
-// under /api/auth (verified - every auth request then 404s), so neither a
-// `use(path)` middleware nor a second `on(path)` route may be added here.
-const EMAIL_GUARD_BODY = {
-  error: "email_not_configured",
-  code: "EMAIL_NOT_CONFIGURED",
-  message:
-    "Email delivery is not configured on this server. Set SMTP_HOST, SMTP_USER, SMTP_PASS and EMAIL_FROM.",
-};
-
-// 2. Mount Better Auth Handler on /api/auth/*
-app.on(["POST", "GET"], "/api/auth/**", (c) => {
-  const pathname = new URL(c.req.url).pathname;
-  const sendsEmail =
-    pathname === "/api/auth/request-password-reset" ||
-    pathname === "/api/auth/send-verification-email";
-  if (c.req.method === "POST" && sendsEmail && !isEmailConfigured()) {
-    return c.json(EMAIL_GUARD_BODY, 503);
-  }
-  return auth.handler(c.req.raw);
-});
+// Custom authentication routes (replacing Better Auth)
+app.route("/api/auth", auth);
 
 // 2b. Pages that the emails link to. They are rendered by this server so the
 // link works from any device's browser without a separate frontend.
@@ -200,9 +168,10 @@ app.get("/staff", (c) => {
 // 3. Mount TrueDiet Profile & Assessment API
 app.route("/api/profile", profileRoutes);
 
-// 4. Mount Content Library & Saved Items API
+// 4. Mount Content Library, Saved Items and ResourceHub APIs
 app.route("/api/content", contentRoutes);
 app.route("/api/saved", savedRoutes);
+app.route("/api/resource", resourceRoutes);
 
 // 5. Mount Messaging (Ask the Dietitian) and Plans/Subscriptions API
 app.route("/api/messages", messageRoutes);
@@ -285,4 +254,3 @@ async function startServer() {
 }
 
 startServer();
-

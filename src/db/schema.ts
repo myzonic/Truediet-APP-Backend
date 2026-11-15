@@ -10,6 +10,10 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  // Hashed credential for email/password sign-in (scrypt via server/src/lib/password.ts).
+  // Nullable so legacy Better Auth accounts that were Google-only or not yet
+  // migrated keep their rows until a credential is set.
+  password: text("password"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -389,3 +393,221 @@ export const registration = pgTable(
 );
 
 export type Registration = typeof registration.$inferSelect;
+
+// ==========================================
+// 11. ResourceHub - categories, interactive tools, worksheets, checklists
+// ==========================================
+
+export const resourceCategory = pgTable("resource_categories", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  icon: text("icon").notNull().default("book"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("resource_categories_sort_idx").on(t.sortOrder),
+]);
+
+export type ResourceCategory = typeof resourceCategory.$inferSelect;
+
+// ---- Meal planning ----
+
+export const mealPlan = pgTable("meal_plans", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  startDate: text("start_date"),
+  durationDays: integer("duration_days").notNull().default(7),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("meal_plans_user_id_updated_idx").on(t.userId, t.updatedAt),
+]);
+
+export const mealPlanEntry = pgTable(
+  "meal_plan_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => mealPlan.id, { onDelete: "cascade" }),
+    dayIndex: integer("day_index").notNull(),
+    mealType: text("meal_type").notNull(), // breakfast | lunch | dinner | snack
+    title: text("title").notNull(),
+    description: text("description"),
+    items: jsonb("items").$type<string[]>().notNull().default([]),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    mealPlanEntryUnique: uniqueIndex("meal_plan_entries_plan_day_type_unique").on(t.planId, t.dayIndex, t.mealType),
+  })
+);
+
+export type MealPlan = typeof mealPlan.$inferSelect;
+export type MealPlanEntry = typeof mealPlanEntry.$inferSelect;
+
+// ---- Grocery lists ----
+
+export const groceryList = pgTable("grocery_lists", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("grocery_lists_user_id_updated_idx").on(t.userId, t.updatedAt),
+]);
+
+export const groceryItem = pgTable(
+  "grocery_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    listId: uuid("list_id")
+      .notNull()
+      .references(() => groceryList.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    category: text("category").notNull().default("Other"),
+    quantity: text("quantity").notNull().default("1"),
+    unit: text("unit").notNull().default(""),
+    notes: text("notes"),
+    purchased: boolean("purchased").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("grocery_items_list_id_idx").on(t.listId),
+  ]
+);
+
+export type GroceryList = typeof groceryList.$inferSelect;
+export type GroceryItem = typeof groceryItem.$inferSelect;
+
+// ---- Worksheets ----
+
+export const worksheet = pgTable("worksheets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  category: text("category").notNull().default("General"),
+  description: text("description").notNull().default(""),
+  intro: text("intro").notNull().default(""),
+  instructions: text("instructions").notNull().default(""),
+  // Ordered list of fields: { key, label, type, placeholder?, options? }
+  fields: jsonb("fields").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const worksheetResponse = pgTable(
+  "worksheet_responses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    worksheetId: uuid("worksheet_id")
+      .notNull()
+      .references(() => worksheet.id, { onDelete: "cascade" }),
+    answers: jsonb("answers").$type<Record<string, unknown>>().notNull().default({}),
+    completed: boolean("completed").notNull().default(false),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    worksheetResponseUnique: uniqueIndex("worksheet_responses_user_worksheet_unique").on(t.userId, t.worksheetId),
+  })
+);
+
+export type Worksheet = typeof worksheet.$inferSelect;
+export type WorksheetResponse = typeof worksheetResponse.$inferSelect;
+
+// ---- Checklists ----
+
+export const checklist = pgTable("checklists", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  category: text("category").notNull().default("General"),
+  description: text("description").notNull().default(""),
+  // Ordered list of checklist items: { key, label }
+  items: jsonb("items").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const checklistProgress = pgTable(
+  "checklist_progress",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    checklistId: uuid("checklist_id")
+      .notNull()
+      .references(() => checklist.id, { onDelete: "cascade" }),
+    // Map of item key -> boolean
+    checked: jsonb("checked").$type<Record<string, boolean>>().notNull().default({}),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    checklistProgressUnique: uniqueIndex("checklist_progress_user_checklist_unique").on(t.userId, t.checklistId),
+  })
+);
+
+export type Checklist = typeof checklist.$inferSelect;
+export type ChecklistProgress = typeof checklistProgress.$inferSelect;
+
+// ---- Templates ----
+
+export const resourceTemplate = pgTable("resource_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  category: text("category").notNull().default("General"),
+  description: text("description").notNull().default(""),
+  // Structured fields that define the template's editable areas.
+  fields: jsonb("fields").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type ResourceTemplate = typeof resourceTemplate.$inferSelect;
+
+// ---- Resource progress (recently viewed / continue learning) ----
+
+export const resourceProgress = pgTable(
+  "resource_progress",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    contentId: uuid("content_id").references(() => content.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    type: text("type").notNull().default("resource"),
+    progress: integer("progress").notNull().default(0),
+    lastViewedAt: timestamp("last_viewed_at").notNull().defaultNow(),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    resourceProgressUnique: uniqueIndex("resource_progress_user_slug_unique").on(t.userId, t.slug),
+    resourceProgressUserIdx: index("resource_progress_user_id_last_viewed_idx").on(t.userId, t.lastViewedAt),
+  })
+);
+
+export type ResourceProgress = typeof resourceProgress.$inferSelect;
