@@ -20,6 +20,7 @@ import { calRoutes } from "./routes/cal.js";
 import { calWebhookRoutes, calWebhookAltRoutes } from "./routes/cal-webhook.js";
 import { appointmentRoutes } from "./routes/appointments.js";
 import { registrationRoutes } from "./routes/registrations.js";
+import { diagnosticsRoutes } from "./routes/diagnostics.js";
 import { seedContent } from "./db/seed.js";
 import { pool } from "./db/index.js";
 import * as dotenv from "dotenv";
@@ -228,6 +229,8 @@ app.route("/api/cal", calWebhookAltRoutes);
 app.route("/api/appointments", appointmentRoutes);
 // 12. Mount Webinar / class registrations API
 app.route("/api/registrations", registrationRoutes);
+// 13. Staff-only operational diagnostics (read-only; staff key required)
+app.route("/api/diagnostics", diagnosticsRoutes);
 
 // Run database migrations on startup
 async function startServer() {

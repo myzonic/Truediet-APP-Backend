@@ -103,12 +103,14 @@ interface ExpoPushMessage {
   channelId: string;
   priority: "high";
   ttl?: number;
+  /** Android notification accent colour (True Diet teal). */
+  color?: string;
   /**
    * Android small icon. It must match a drawable resource in the app
    * (res/drawable-<density>/ic_truediet_notification.png), which is a
-   * white-on-transparent silhouette of the True Diet fork mark - Android
-   * renders status-bar icons as flat shapes, so the colourful launcher icon
-   * cannot be used here.
+   * white-on-transparent silhouette of the True Diet mark - Android renders
+   * status-bar icons as flat shapes, so the colourful launcher icon cannot be
+   * used here.
    */
   icon?: string;
 }
@@ -241,6 +243,7 @@ export async function sendPushToUser(userId: string, input: PushInput): Promise<
         channelId,
         priority: "high",
         ttl: 60 * 60 * 24,
+        color: "#054B70",
         icon: ANDROID_NOTIFICATION_ICON,
       }));
 
