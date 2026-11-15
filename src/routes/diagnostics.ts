@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import crypto from "node:crypto";
 import net from "node:net";
 import tls from "node:tls";
+import nodemailer from "nodemailer";
 import {
   isEmailConfigured,
   describeTransport,
@@ -81,6 +82,33 @@ function tlsProbe(host: string, port: number, timeoutMs = 8000): Promise<{ ok: b
   });
 }
 
+/** STARTTLS submission probe: connect, upgrade, AUTH - no message is sent. */
+async function starttlsProbe(host: string, port: number): Promise<{ ok: boolean; error?: string }> {
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) return { ok: false, error: "email_not_configured" };
+  try {
+    const t = nodemailer.createTransport({
+      host,
+      port,
+      secure: false,
+      requireTLS: true,
+      auth: { user, pass },
+      connectionTimeout: 8_000,
+      greetingTimeout: 8_000,
+      socketTimeout: 12_000,
+    });
+    await t.verify();
+    return { ok: true };
+  } catch (err) {
+    const e = err as { code?: string; responseCode?: number; name?: string };
+    return {
+      ok: false,
+      error: e?.code || (e?.responseCode ? `smtp ${e.responseCode}` : e?.name || "failed"),
+    };
+  }
+}
+
 diagnosticsRoutes.get("/email", async (c) => {
   const host = process.env.SMTP_HOST || "";
   const port = Number(process.env.SMTP_PORT || 465);
@@ -99,6 +127,23 @@ diagnosticsRoutes.get("/email", async (c) => {
     result.tcp = await tcpProbe(host, port);
     if (secure) result.tls = await tlsProbe(host, port);
     result.verify = await verifyConnection();
+
+    // Probe the standard submission ports so a host firewall that blocks a
+    // single port (e.g. Hetzner blocks outbound 25 and 465 but not 587) is
+    // distinguishable from a bad credential or a dead mail server.
+    const ports = [25, 465, 587];
+    result.ports = Object.fromEntries(
+      await Promise.all(
+        ports.map(async (p) => [
+          String(p),
+          p === port ? result.tcp : await tcpProbe(host, p, 6000),
+        ])
+      )
+    );
+
+    // A STARTTLS handshake on 587 proves the fallback transport works end to
+    // end (connect + TLS upgrade + AUTH), without sending a message.
+    result.starttls587 = await starttlsProbe(host, 587);
   }
 
   return c.json(result);
