@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import crypto from "node:crypto";
 import net from "node:net";
 import tls from "node:tls";
+import dns from "node:dns/promises";
 import nodemailer from "nodemailer";
 import {
   isEmailConfigured,
@@ -163,6 +164,42 @@ diagnosticsRoutes.get("/email", async (c) => {
           ["smtp.titan.email", 587],
         ] as Array<[string, number]>
       ).map(async ([h, p]) => [`${h}:${p}`, await tcpProbe(h, p, 6000)])
+    )
+  );
+
+  // Why can every port to the mail host time out while 443 and DNS work? The
+  // usual cause is an AAAA (IPv6) record: the runtime prefers IPv6 and the
+  // container has no working IPv6 route, so the connect hangs instead of
+  // failing fast. Resolve the host and probe each family explicitly.
+  const dnsReport: Record<string, unknown> = {};
+  let v4: string[] = [];
+  let v6: string[] = [];
+  try {
+    v4 = await dns.resolve4(host || "smtp.titan.email");
+    dnsReport.a = v4;
+  } catch (e) {
+    dnsReport.a = (e as NodeJS.ErrnoException)?.code || "error";
+  }
+  try {
+    v6 = await dns.resolve6(host || "smtp.titan.email");
+    dnsReport.aaaa = v6;
+  } catch (e) {
+    dnsReport.aaaa = (e as NodeJS.ErrnoException)?.code || "error";
+  }
+  result.dns = dnsReport;
+
+  // Probe each resolved address directly (bypassing the resolver's preference)
+  // plus an unrelated MX host on port 25, to separate "SMTP ports are blocked"
+  // from "this host is unreachable".
+  const targets: Array<[string, number]> = [
+    ...v4.map((ip) => [ip, 465] as [string, number]),
+    ...v6.map((ip) => [ip, 465] as [string, number]),
+    ["gmail-smtp-in.l.google.com", 25],
+    ["aspmx.l.google.com", 25],
+  ];
+  result.targets = Object.fromEntries(
+    await Promise.all(
+      targets.map(async ([h, p]) => [`${h}:${p}`, await tcpProbe(h, p, 6000)])
     )
   );
 
