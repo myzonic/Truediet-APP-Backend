@@ -21,6 +21,7 @@ import { calWebhookRoutes, calWebhookAltRoutes } from "./routes/cal-webhook.js";
 import { appointmentRoutes } from "./routes/appointments.js";
 import { registrationRoutes } from "./routes/registrations.js";
 import { diagnosticsRoutes } from "./routes/diagnostics.js";
+import { voiceRoutes } from "./routes/voice.js";
 import { seedContent } from "./db/seed.js";
 import { pool } from "./db/index.js";
 import * as dotenv from "dotenv";
@@ -129,6 +130,7 @@ app.get("/health", async (c) => {
       googleSignInEnabled: Boolean(
         process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ),
+      groqConfigured: Boolean(process.env.GROQ_API_KEY),
     });
   } catch (err: any) {
     return c.json(
@@ -198,7 +200,9 @@ app.route("/api/cal", calWebhookAltRoutes);
 app.route("/api/appointments", appointmentRoutes);
 // 12. Mount Webinar / class registrations API
 app.route("/api/registrations", registrationRoutes);
-// 13. Staff-only operational diagnostics (read-only; staff key required)
+// 13. Mount Groq Voice-to-Text API
+app.route("/api/voice", voiceRoutes);
+// 14. Staff-only operational diagnostics (read-only; staff key required)
 app.route("/api/diagnostics", diagnosticsRoutes);
 
 // Run database migrations on startup

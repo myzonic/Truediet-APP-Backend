@@ -50,7 +50,7 @@ const SECURE_JS = [
   ".then(function(r){return r.text().then(function(t){return {status:r.status,body:t};});})",
   ".then(function(res){",
   "var data={};try{data=JSON.parse(res.body);}catch(e){}",
-  "if(res.status>=200&&res.status<300&&data.status){",
+  "if(res.status>=200&&res.status<300&&(data.status||data.success)){",
   "form.style.display='none';",
   "show(ok,'Password updated. Open the True Diet app and sign in with your new password.');",
   "return;}",
@@ -190,7 +190,7 @@ export function renderVerifyPage(): Page {
     `fetch('/api/auth/verify-email?token='+encodeURIComponent(token))` +
     `.then(function(r){return r.text().then(function(t){return {status:r.status,body:t};});})` +
     `.then(function(res){var d={};try{d=JSON.parse(res.body);}catch(e){}` +
-    `if(res.status>=200&&res.status<300&&d.status){done();return;}` +
+    `if(res.status>=200&&res.status<300&&(d.status||d.success)){done();return;}` +
     `var code=(d.code||'').toUpperCase();` +
     `fail(known[code]||d.message||'Could not verify this email. Please try again.');})` +
     `.catch(function(){fail('Network error. Check your connection and try again.');});` +

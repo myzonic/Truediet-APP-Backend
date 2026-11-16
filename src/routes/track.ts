@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db } from "../db/index.js";
-import { mealLog, hungerCheckin, weightEntry } from "../db/schema.js";
+import { mealLog, hungerCheckin, weightEntry, preference } from "../db/schema.js";
 import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { nextDay, parseLimit, resolveDay, validateMeal, validateRating, validateWeight } from "../lib/validation.js";
 import { getAuthUserFromRequest } from "../lib/session.js";
@@ -44,7 +44,7 @@ trackRoutes.get("/meals", requireSession, async (c) => {
     .where(and(eq(mealLog.userId, user.id), gte(mealLog.loggedAt, start), lt(mealLog.loggedAt, end)))
     .orderBy(desc(mealLog.loggedAt));
 
-  return c.json({ date: start.toISOString().slice(0, 10), meals: rows });
+  return c.json({ date: start.toISOString().slice(0, 10), meals: rows.filter((r) => r.mealType !== "water") });
 });
 
 // POST /api/meals -> log a meal
@@ -92,6 +92,55 @@ trackRoutes.delete("/meals/:id", requireSession, async (c) => {
 
   if (!deleted.length) return c.json({ error: "Not found" }, 404);
   return c.json({ deleted: true });
+});
+
+// PATCH /api/meals/:id -> update an existing meal entry
+trackRoutes.patch("/meals/:id", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const id = c.req.param("id");
+  if (!UUID_PATTERN.test(id)) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const [existing] = await db
+    .select()
+    .from(mealLog)
+    .where(and(eq(mealLog.id, id), eq(mealLog.userId, user.id)))
+    .limit(1);
+  if (!existing) return c.json({ error: "Not found" }, 404);
+
+  const body = await c.req.json().catch(() => ({}));
+  let nextMealType = existing.mealType;
+  if (body?.mealType !== undefined) {
+    const validated = validateMeal(body.mealType);
+    if (validated.error || !validated.value) {
+      return c.json({ error: validated.error || "Invalid meal" }, 400);
+    }
+    nextMealType = validated.value.mealType;
+  }
+
+  const description =
+    typeof body?.description === "string" && body.description.trim()
+      ? body.description.trim().slice(0, 2000)
+      : existing.description;
+  const notes =
+    body?.notes !== undefined
+      ? typeof body.notes === "string"
+        ? body.notes.trim().slice(0, 2000) || null
+        : null
+      : existing.notes;
+
+  const [updated] = await db
+    .update(mealLog)
+    .set({
+      mealType: nextMealType,
+      description,
+      notes,
+    })
+    .where(and(eq(mealLog.id, id), eq(mealLog.userId, user.id)))
+    .returning();
+
+  return c.json({ meal: updated });
 });
 
 // GET /api/hunger -> recent hunger & fullness check-ins
@@ -249,4 +298,176 @@ trackRoutes.get("/progress", requireSession, async (c) => {
       days,
     },
   });
+});
+
+// ==========================================
+// Water & Tracking Settings (stored safely on the existing tables)
+// ==========================================
+
+async function getWaterGoalForUser(userId: string): Promise<{ waterGoalMl: number; weightGoal: string | null }> {
+  const [pref] = await db.select().from(preference).where(eq(preference.userId, userId)).limit(1);
+  const raw = (pref?.consents || {}) as Record<string, unknown>;
+  const waterGoalMl = typeof raw.waterGoalMl === "number" && raw.waterGoalMl >= 500 ? raw.waterGoalMl : 2000;
+  const weightGoal = typeof raw.weightGoal === "string" ? raw.weightGoal : null;
+  return { waterGoalMl, weightGoal };
+}
+
+// GET /api/water-summary -> today's water intake total + daily goal
+trackRoutes.get("/water-summary", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const start = resolveDay(c.req.query("date"));
+  const end = nextDay(start);
+  const { waterGoalMl } = await getWaterGoalForUser(user.id);
+
+  const rows = await db
+    .select()
+    .from(mealLog)
+    .where(and(eq(mealLog.userId, user.id), eq(mealLog.mealType, "water"), gte(mealLog.loggedAt, start), lt(mealLog.loggedAt, end)))
+    .orderBy(desc(mealLog.loggedAt));
+
+  let totalMl = 0;
+  const entries = rows.map((r) => {
+    const ml = Math.max(0, parseInt(r.description.replace(/[^0-9]/g, ""), 10) || 0);
+    totalMl += ml;
+    return { id: r.id, amountMl: ml, loggedAt: r.loggedAt };
+  });
+
+  return c.json({ dailyGoalMl: waterGoalMl, totalMl, entries });
+});
+
+// POST /api/water { amountMl } -> log water intake
+trackRoutes.post("/water", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const body = await c.req.json().catch(() => ({}));
+  const amountMl = Math.round(Number(body?.amountMl) || 0);
+  if (amountMl < 10 || amountMl > 5000) {
+    return c.json({ error: "Provide an amount between 10 and 5000 ml" }, 400);
+  }
+
+  const [created] = await db
+    .insert(mealLog)
+    .values({
+      userId: user.id,
+      mealType: "water",
+      description: `${amountMl} ml water`,
+      notes: typeof body?.notes === "string" ? body.notes.trim().slice(0, 500) : null,
+      source: "manual",
+    })
+    .returning();
+
+  return c.json(
+    {
+      entry: {
+        id: created.id,
+        userId: created.userId,
+        weight: String(amountMl),
+        amountMl,
+        recordedAt: created.loggedAt,
+        createdAt: created.createdAt,
+      },
+    },
+    201
+  );
+});
+
+// PATCH /api/water/:id { amountMl }
+trackRoutes.patch("/water/:id", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const id = c.req.param("id");
+  if (!UUID_PATTERN.test(id)) return c.json({ error: "Not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const amountMl = Math.round(Number(body?.amountMl) || 0);
+  if (amountMl < 10 || amountMl > 5000) {
+    return c.json({ error: "Provide an amount between 10 and 5000 ml" }, 400);
+  }
+
+  const [updated] = await db
+    .update(mealLog)
+    .set({ description: `${amountMl} ml water` })
+    .where(and(eq(mealLog.id, id), eq(mealLog.userId, user.id), eq(mealLog.mealType, "water")))
+    .returning();
+  if (!updated) return c.json({ error: "Not found" }, 404);
+  return c.json({ entry: updated });
+});
+
+// DELETE /api/water/:id
+trackRoutes.delete("/water/:id", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const id = c.req.param("id");
+  if (!UUID_PATTERN.test(id)) return c.json({ error: "Not found" }, 404);
+
+  const deleted = await db
+    .delete(mealLog)
+    .where(and(eq(mealLog.id, id), eq(mealLog.userId, user.id), eq(mealLog.mealType, "water")))
+    .returning();
+  if (!deleted.length) return c.json({ error: "Not found" }, 404);
+  return c.json({ deleted: true });
+});
+
+// GET /api/tracking-settings
+trackRoutes.get("/tracking-settings", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const settings = await getWaterGoalForUser(user.id);
+  return c.json(settings);
+});
+
+// POST /api/tracking-settings { waterGoalMl, weightGoal }
+trackRoutes.post("/tracking-settings", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const body = await c.req.json().catch(() => ({}));
+  const waterGoalMl = Math.min(10000, Math.max(500, Math.round(Number(body?.waterGoalMl) || 2000)));
+  const weightGoal = typeof body?.weightGoal === "string" ? body.weightGoal.trim().slice(0, 40) : null;
+
+  const [existing] = await db.select().from(preference).where(eq(preference.userId, user.id)).limit(1);
+  const nextConsents = {
+    ...(existing?.consents || {}),
+    waterGoalMl: waterGoalMl as any,
+    weightGoal: weightGoal as any,
+  };
+
+  if (existing) {
+    await db
+      .update(preference)
+      .set({ consents: nextConsents, updatedAt: new Date() })
+      .where(eq(preference.userId, user.id));
+  } else {
+    await db.insert(preference).values({
+      userId: user.id,
+      notifications: {},
+      accessibility: {},
+      consents: nextConsents,
+    });
+  }
+
+  return c.json({ waterGoalMl, weightGoal });
+});
+
+// GET /api/voice-transcriptions -> voice meal log history (metadata only, no raw audio)
+trackRoutes.get("/voice-transcriptions", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const rows = await db
+    .select()
+    .from(mealLog)
+    .where(and(eq(mealLog.userId, user.id), eq(mealLog.source, "voice")))
+    .orderBy(desc(mealLog.loggedAt))
+    .limit(30);
+
+  return c.json({
+    transcriptions: rows.map((r) => ({
+      id: r.id,
+      text: r.description,
+      mealType: r.mealType,
+      loggedAt: r.loggedAt,
+      status: "saved",
+    })),
+  });
+});
+
+// DELETE /api/voice-transcriptions/:id -> delete a voice meal log record
+trackRoutes.delete("/voice-transcriptions/:id", requireSession, async (c) => {
+  const user = c.get("user") as { id: string };
+  const id = c.req.param("id");
+  if (!UUID_PATTERN.test(id)) return c.json({ error: "Not found" }, 404);
+  await db.delete(mealLog).where(and(eq(mealLog.id, id), eq(mealLog.userId, user.id)));
+  return c.json({ deleted: true });
 });

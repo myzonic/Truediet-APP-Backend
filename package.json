@@ -1,7 +1,7 @@
-﻿{
+{
   "name": "truediet-backend",
   "version": "1.0.0",
-  "description": "TrueDiet Backend API with Hono, Drizzle ORM, PostgreSQL and Better Auth",
+  "description": "TrueDiet Backend API with Hono, Drizzle ORM, PostgreSQL and Custom Auth",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.6.14",
