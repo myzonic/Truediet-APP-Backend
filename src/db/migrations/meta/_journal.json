@@ -120,6 +120,13 @@
       "when": 1794872800000,
       "tag": "0016_user_password",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794959200000,
+      "tag": "0017_resource_hub_seed",
+      "breakpoints": true
     }
   ]
 }
