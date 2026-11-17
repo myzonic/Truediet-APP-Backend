@@ -19,7 +19,8 @@
     "routes:check": "node scripts/route-check.mjs",
     "test:auth-email": "node scripts/auth-email-flow.mjs",
     "test:smtp": "node scripts/email-smtp.mjs",
-    "test": "tsx --test src/lib/validation.test.ts src/lib/email.test.ts"
+    "test": "tsx --test src/lib/validation.test.ts src/lib/email.test.ts",
+    "db:validate-json": "node scripts/validate-migration-json.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
