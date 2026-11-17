@@ -22,7 +22,8 @@
     "test": "tsx --test src/lib/validation.test.ts src/lib/email.test.ts",
     "db:validate-json": "node scripts/validate-migration-json.mjs",
     "db:validate-inserts": "node scripts/validate-migration-inserts.mjs",
-    "db:validate": "node scripts/validate-migration-json.mjs && node scripts/validate-migration-inserts.mjs"
+    "db:validate": "node scripts/validate-migration-json.mjs && node scripts/validate-migration-inserts.mjs",
+    "e2e:auth": "node scripts/e2e-custom-auth.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
