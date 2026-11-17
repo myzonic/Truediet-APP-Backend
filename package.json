@@ -20,7 +20,9 @@
     "test:auth-email": "node scripts/auth-email-flow.mjs",
     "test:smtp": "node scripts/email-smtp.mjs",
     "test": "tsx --test src/lib/validation.test.ts src/lib/email.test.ts",
-    "db:validate-json": "node scripts/validate-migration-json.mjs"
+    "db:validate-json": "node scripts/validate-migration-json.mjs",
+    "db:validate-inserts": "node scripts/validate-migration-inserts.mjs",
+    "db:validate": "node scripts/validate-migration-json.mjs && node scripts/validate-migration-inserts.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
