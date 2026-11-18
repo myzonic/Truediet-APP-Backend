@@ -307,7 +307,10 @@ resourceRoutes.post("/meal-plans", async (c) => {
       notes: typeof body.notes === "string" ? body.notes : null,
     })
     .returning();
-  return c.json({ item: planShape(row) }, 201);
+  // A freshly created plan has no entries yet, but the client types the result
+  // as MealPlanDetail (which includes `entries`), so include an empty array to
+  // keep the response shape consistent with GET /meal-plans/:id.
+  return c.json({ item: { ...planShape(row), entries: [] } }, 201);
 });
 
 // GET /api/resource/meal-plans/:id -> plan with all its entries.
@@ -385,7 +388,14 @@ resourceRoutes.put("/meal-plans/:id/entries", async (c) => {
   if (!plan) return c.json({ error: "not_found", message: "Meal plan not found" }, 404);
 
   const body = await parseBody(c);
-  const dayIndex = Math.max(0, Math.floor(Number(body.dayIndex)));
+  // Validate dayIndex explicitly: Number(undefined) is NaN, and the old
+  // Math.max(0, Math.floor(NaN)) guard silently produced NaN, which Postgres
+  // rejects for an integer column -> an unhandled 500 instead of a 400.
+  const rawDay = Number(body.dayIndex);
+  if (!Number.isInteger(rawDay) || rawDay < 0) {
+    return c.json({ error: "validation_error", message: "dayIndex must be a non-negative whole number" }, 400);
+  }
+  const dayIndex = rawDay;
   const mealType = typeof body.mealType === "string" ? body.mealType : "";
   const title = typeof body.title === "string" ? body.title.trim() : "";
   if (!MEAL_TYPES.has(mealType)) {
