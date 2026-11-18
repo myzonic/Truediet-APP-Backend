@@ -598,8 +598,10 @@ auth.post("/forgot-password", async (c) => {
     }
 
     const payload: Record<string, unknown> = { status: true, success: true };
-    if (!isEmailConfigured()) {
-      // Surface token in local/test environments without SMTP configured
+    // Only expose the reset token outside production, and never when email is
+    // configured. Returning it whenever email was unconfigured leaked a usable
+    // reset token to anyone who knew an email address.
+    if (process.env.NODE_ENV !== "production" && !isEmailConfigured()) {
       payload.resetToken = resetToken;
     }
 
