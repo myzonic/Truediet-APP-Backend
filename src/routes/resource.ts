@@ -119,42 +119,6 @@ resourceRoutes.get("/recommended", async (c) => {
   return c.json({ items: rows.map(summary) });
 });
 
-// GET /api/resource/:slug -> full resource detail, premium-gated for members.
-resourceRoutes.get("/:slug", async (c) => {
-  const slug = c.req.param("slug");
-  const [row] = await db.select().from(content).where(eq(content.slug, slug)).limit(1);
-
-  if (!row) {
-    return c.json({ error: "not_found", message: "Content not found" }, 404);
-  }
-
-  if (row.isPremium) {
-    const user = await getAuthUserFromRequest(c);
-    if (!user) {
-      return c.json({ error: "unauthorized", message: "Authentication required" }, 401);
-    }
-    const [entitled] = await db
-      .select({ key: entitlement.key })
-      .from(entitlement)
-      .where(and(eq(entitlement.userId, user.id), eq(entitlement.key, "premium_content")))
-      .limit(1);
-    const [sub] = await db
-      .select({ status: subscription.status })
-      .from(subscription)
-      .where(eq(subscription.userId, user.id))
-      .limit(1);
-    const hasAccess = Boolean(entitled) || sub?.status === "active" || sub?.status === "trialing";
-    if (!hasAccess) {
-      return c.json(
-        { error: "payment_required", message: "This content requires an active True Diet membership." },
-        403
-      );
-    }
-  }
-
-  return c.json({ item: { ...summary(row), body: row.body ?? undefined } });
-});
-
 // GET /api/resource/search?q=&type=&category=&limit= -> full-text-ish search
 // across the educational resource catalog.
 resourceRoutes.get("/search", async (c) => {
@@ -1006,6 +970,48 @@ resourceRoutes.put("/progress/:slug", async (c) => {
       lastViewedAt: row.lastViewedAt,
     },
   });
+});
+
+// GET /api/resource/:slug -> full resource detail, premium-gated for members.
+//
+// IMPORTANT: this catch-all MUST stay the last route on this router. Hono
+// matches in registration order, so registering "/:slug" earlier makes it
+// swallow every one-segment literal path below it ("/meal-plans",
+// "/grocery-lists", "/worksheets", "/checklists", "/templates", "/progress",
+// "/search") and answer them with "Content not found".
+resourceRoutes.get("/:slug", async (c) => {
+  const slug = c.req.param("slug");
+  const [row] = await db.select().from(content).where(eq(content.slug, slug)).limit(1);
+
+  if (!row) {
+    return c.json({ error: "not_found", message: "Content not found" }, 404);
+  }
+
+  if (row.isPremium) {
+    const user = await getAuthUserFromRequest(c);
+    if (!user) {
+      return c.json({ error: "unauthorized", message: "Authentication required" }, 401);
+    }
+    const [entitled] = await db
+      .select({ key: entitlement.key })
+      .from(entitlement)
+      .where(and(eq(entitlement.userId, user.id), eq(entitlement.key, "premium_content")))
+      .limit(1);
+    const [sub] = await db
+      .select({ status: subscription.status })
+      .from(subscription)
+      .where(eq(subscription.userId, user.id))
+      .limit(1);
+    const hasAccess = Boolean(entitled) || sub?.status === "active" || sub?.status === "trialing";
+    if (!hasAccess) {
+      return c.json(
+        { error: "payment_required", message: "This content requires an active True Diet membership." },
+        403
+      );
+    }
+  }
+
+  return c.json({ item: { ...summary(row), body: row.body ?? undefined } });
 });
 
 export default resourceRoutes;
