@@ -2,6 +2,7 @@
 import { content, plan, savedItem } from "./schema.js";
 import { eq } from "drizzle-orm";
 import { contentSeed } from "./content-seed.generated.js";
+import { announceNewContent, AnnounceableContent } from "../lib/push.js";
 
 // The content library is generated from the app's own content modules by
 // scripts/generate-content-seed.ts, so the database always holds
@@ -52,11 +53,20 @@ const plans: {
 ];
 
 export async function seedContent() {
+  // Which slugs already exist tells us what is genuinely new. The very first
+  // seed of an empty library is not "new content", so announcements are skipped
+  // when the library starts out empty - otherwise a fresh install would blast
+  // every member with the whole catalogue at once.
+  const existing = await db.select({ slug: content.slug }).from(content);
+  const existingSlugs = new Set(existing.map((row) => row.slug));
+  const isInitialSeed = existingSlugs.size === 0;
+  const published: AnnounceableContent[] = [];
+
   // Upsert rather than insert-and-ignore, so an edit to the app's content
   // modules actually reaches the database instead of being silently skipped
   // because the slug already exists.
   for (const item of items) {
-    await db
+    const [row] = await db
       .insert(content)
       .values({
         slug: item.slug,
@@ -87,7 +97,18 @@ export async function seedContent() {
           isPremium: item.isPremium ?? false,
           updatedAt: new Date(),
         },
+      })
+      .returning({
+        id: content.id,
+        slug: content.slug,
+        type: content.type,
+        title: content.title,
+        subtitle: content.subtitle,
+        listenUrl: content.listenUrl,
+        mediaUrl: content.mediaUrl,
       });
+
+    if (row && !existingSlugs.has(item.slug)) published.push(row);
   }
 
   for (const item of plans) {
@@ -114,6 +135,14 @@ export async function seedContent() {
   }
 
   await reconcileContentDuplicates();
+
+  if (!isInitialSeed && published.length) {
+    console.log(`Content seed: announcing ${published.length} new item(s).`);
+    for (const item of published) {
+      // Fire-and-forget: a push must never delay or fail server start.
+      void announceNewContent(item).catch(() => undefined);
+    }
+  }
 }
 
 /**

@@ -411,3 +411,103 @@ export async function sendAppointmentReminders(): Promise<void> {
     });
   }
 }
+
+/** The screen and params a published content item should open when tapped. */
+export interface ContentNotificationTarget {
+  screen: string;
+  params: Record<string, unknown>;
+}
+
+/**
+ * Maps a content row to the mobile route that renders it, with the params that
+ * route expects. Kept in step with `routeForType` in routes/content.ts and the
+ * screens' own param names.
+ */
+export function contentNotificationTarget(item: {
+  slug: string;
+  type: string;
+  title: string;
+  subtitle: string;
+  listenUrl?: string | null;
+  mediaUrl?: string | null;
+}): ContentNotificationTarget {
+  switch (item.type) {
+    case "resource":
+      return { screen: "ResourceDetail", params: { slug: item.slug, title: item.title } };
+    case "recipe":
+      return {
+        screen: "RecipeDetail",
+        params: { recipeId: item.slug.replace(/^recipe-/, ""), title: item.title },
+      };
+    case "myth":
+      return {
+        screen: "MythDetail",
+        params: { mythId: item.slug.replace(/^myth-/, ""), claim: item.title },
+      };
+    case "podcast":
+      return {
+        screen: "PodcastDetail",
+        params: { title: item.title, meta: item.subtitle, listenUrl: item.listenUrl ?? undefined },
+      };
+    case "webinar":
+    case "class":
+      return {
+        screen: "WebinarDetail",
+        params: {
+          title: item.title,
+          meta: item.subtitle,
+          live: item.slug.startsWith("webinar-"),
+          mediaUrl: item.mediaUrl ?? undefined,
+        },
+      };
+    case "topic":
+      return { screen: "Topic", params: { title: item.title } };
+    case "article":
+    default:
+      return { screen: "Article", params: { articleId: item.slug, title: item.title } };
+  }
+}
+
+export interface AnnounceableContent {
+  id: string;
+  slug: string;
+  type: string;
+  title: string;
+  subtitle: string;
+  listenUrl?: string | null;
+  mediaUrl?: string | null;
+}
+
+/**
+ * Announces one newly published content item to every member who has an active
+ * device and has left the "content" category switched on.
+ *
+ * Delivery is deduplicated per (member, item) through the notification log, so
+ * a restart or a repeated seed can never deliver the same announcement twice.
+ * Never throws: an announcement must not fail the seed that triggered it.
+ */
+export async function announceNewContent(item: AnnounceableContent): Promise<PushResult[]> {
+  const results: PushResult[] = [];
+  try {
+    const recipients = await db
+      .selectDistinct({ userId: pushToken.userId })
+      .from(pushToken)
+      .where(eq(pushToken.isActive, true));
+
+    const target = contentNotificationTarget(item);
+    for (const { userId } of recipients) {
+      results.push(
+        await sendPushToUser(userId, {
+          category: "content",
+          title: "New in the True Diet library",
+          body: item.title,
+          data: { type: "content", screen: target.screen, params: target.params },
+          dedupeKey: `content-published:${item.id}`,
+        })
+      );
+    }
+  } catch {
+    // Best-effort broadcast.
+  }
+  return results;
+}
